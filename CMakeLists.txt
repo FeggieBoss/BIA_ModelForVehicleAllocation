@@ -1,7 +1,7 @@
 project(month_schedule LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 
-set(HIGHS_DIR /home/feggie/MyData/BIA/lib/cmake/highs)
+set(HIGHS_DIR ./lib/cmake/highs)
 
 find_package(HIGHS REQUIRED)
 find_package(Threads REQUIRED)

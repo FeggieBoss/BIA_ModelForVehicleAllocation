@@ -29,6 +29,10 @@ int inf = 1e6;
 int inf_d = 1000;
 
 
+int get_3d_index(int i, int j, int k) {
+    return i+(j+(k-1)*m - 1)*n - 1;
+}
+
 std::map<std::pair<int,int>, int> dists; 
 std::vector<std::vector<int>> d; // = {
 //     {0,  0,  0,  0,  0,  0,  0,  0,   0,  0 , 0},
@@ -181,25 +185,17 @@ HighsModel create_model() {
     for(auto&el : orders) {
         cout<<el.order_id<<" "<<el.obligation<<" "<<el.start_time<<" "<<el.finish_time<<" "<<el.from_city<<" "<<el.to_city<<" "<<el.type<<" "<<el.distance<<" "<<el.revenue<<endl;
     }
+cout<<"core dumped mfca"<<endl;
+
+    cout<<(n+1)*(m+1)*(m+1)<<endl;
     
     // c^Tx + d subject to L <= Ax <= U; l <= x <= u
     int c[n+1][m+1][m+1];
     int l[n+1][m+1][m+1];
     int u[n+1][m+1][m+1];
     const int nmm = n*m_real+m_real+m_fake+n*m*m;
-    int L[nmm+1], U[nmm+1];
-    int A[nmm+1][n+1][m+1][m+1];
 
-    for(int i=0;i<=nmm;++i) {
-        for(int j=0;j<=n;++j) {
-            for(int k=0;k<=m;++k) {
-                for(int t=0;t<=m;++t) {
-                    A[i][j][k][t] = 0;
-                }
-            }
-        }
-    }
-
+cout<<"core dumped mfca"<<endl;
     // c 
     for(int i=1;i<=n;++i) {
         for(int j=1;j<=m;++j) {
@@ -230,6 +226,7 @@ HighsModel create_model() {
         }
     }
 
+cout<<"core dumped mfca"<<endl;
     // l,u
     for(int i=1;i<=n;++i) {
         for(int j=1;j<=m;++j) {
@@ -243,116 +240,97 @@ HighsModel create_model() {
         }
     }
 
-    // A,L,U
-    int cur = 0;
-    for(int i=1;i<=n;++i) { // n*m_real
-        for(int j=1;j<=m_real;++j) { // reals
-
-            L[cur] = 0;
-            U[cur] = 0;
-            for(int k=1;k<=m;++k) {
-                A[cur][i][k][j] += 1;
-                A[cur][i][j][k] -= 1;
-            }
-            ++cur;
-        }
-    }
-    for(int j=1;j<=m_real+m_fake;++j) { // fake,reals m_real+m_fake
-
-        L[cur] = orders[j].obligation;
-        U[cur] = 1;
-        for(int i=1;i<=n;++i) {
-            for(int k=1;k<=m;++k) {
-                A[cur][i][j][k] += 1;
-            }
-        }
-        ++cur;
-    }           
-
-    for(int i=1;i<=n;++i) { // n*m*m
-        for(int j=1;j<=m;++j) {
-            for(int k=1;k<=m;++k) {
-                
-                L[cur]=0;
-                U[cur]=orders[k].start_time;
-                A[cur][i][j][k] += orders[j].finish_time + get_dist(orders[j].to_city, orders[k].from_city)/speed;
-                ++cur;
-            }
-        }
-    }    
-
     HighsModel model;
     model.lp_.num_col_ = n*m*m;
-    model.lp_.num_row_ = cur;
+    model.lp_.num_row_ = nmm;
 
     model.lp_.sense_ = ObjSense::kMaximize;
 
     model.lp_.offset_ = 0;
 
+cout<<"core dumped mfca"<<endl;
     // model.lp_.col_cost_
     model.lp_.col_cost_.resize(n*m*m);
     for(int i=1;i<=n;++i) {
         for(int j=1;j<=m;++j) {
             for(int k=1;k<=m;++k) {
-                model.lp_.col_cost_[i+(j+(k-1)*m - 1)*n - 1] = c[i][j][k];
+                model.lp_.col_cost_[get_3d_index(i,j,k)] = c[i][j][k];
             }
         }
     }
 
+cout<<"core dumped mfca"<<endl;
     // model.lp_.col_lower_, model.lp_.col_upper_
     model.lp_.col_lower_.resize(n*m*m);
     model.lp_.col_upper_.resize(n*m*m);
     for(int i=1;i<=n;++i) {
         for(int j=1;j<=m;++j) {
             for(int k=1;k<=m;++k) {
-                model.lp_.col_lower_[i+(j+(k-1)*m - 1)*n - 1] = l[i][j][k];
-                model.lp_.col_upper_[i+(j+(k-1)*m - 1)*n - 1] = u[i][j][k];
+                model.lp_.col_lower_[get_3d_index(i,j,k)] = l[i][j][k];
+                model.lp_.col_upper_[get_3d_index(i,j,k)] = u[i][j][k];
             }
         }
     }
     
     // model.lp_.row_lower_, model.lp_.row_upper_
-    model.lp_.row_lower_.resize(cur);
-    model.lp_.row_upper_.resize(cur);
-    for(int i=0;i<cur;++i) {
-        model.lp_.row_lower_[i] = L[i];
-        model.lp_.row_upper_[i] = U[i];
-    }
-
-    model.lp_.a_matrix_.format_ = MatrixFormat::kRowwise;
     // model.lp_.a_matrix_.start_
-    model.lp_.a_matrix_.start_.resize(cur+1);
-    int ct_=0;
-    for(int u=0;u<cur;++u) {
-        int ct = 0;
-        for(int i=1;i<=n;++i) {
-            for(int j=1;j<=m;++j) {
-                for(int k=1;k<=m;++k) {
-                    ct += (A[u][i][j][k]!=0);
-                }
-            }
-        }
-        ct_+=ct;
-        model.lp_.a_matrix_.start_[u+1] = ct_;
-    }
-
     // model.lp_.a_matrix_.index_, model.lp_.a_matrix_.value_
-    model.lp_.a_matrix_.index_.resize(ct_);
-    model.lp_.a_matrix_.value_.resize(ct_);
-    int it = 0;
-    for(int u=0;u<cur;++u) { 
-        for(int i=1;i<=n;++i) {
-            for(int j=1;j<=m;++j) {
-                for(int k=1;k<=m;++k) {
-                    if(A[u][i][j][k]!=0) {
-                        model.lp_.a_matrix_.index_[it] = i+(j+(k-1)*m - 1)*n - 1;
-                        model.lp_.a_matrix_.value_[it] = A[u][i][j][k];
-                        ++it;
-                    }
-                }
+    
+    model.lp_.a_matrix_.format_ = MatrixFormat::kRowwise;
+cout<<"core dumped mfca"<<endl;
+    // A, L, U
+    int non_zeros = 0;
+    for(int i=1;i<=n;++i) { // n*m_real
+        for(int j=1;j<=m_real;++j) { // reals
+            model.lp_.row_lower_.push_back(0);
+            model.lp_.row_upper_.push_back(0);
+
+            non_zeros += 2*(m-1);
+            model.lp_.a_matrix_.start_.push_back(non_zeros);
+            for(int k=1;k<=m;++k) {
+                if(k==j) continue;
+
+                // A[i][k][j] += 1;
+                model.lp_.a_matrix_.index_.push_back(get_3d_index(i,k,j));
+                model.lp_.a_matrix_.value_.push_back(1);
+                
+                // A[i][j][k] -= 1;
+                model.lp_.a_matrix_.index_.push_back(get_3d_index(i,j,k));
+                model.lp_.a_matrix_.value_.push_back(-1);
             }
         }
     }
+    for(int j=1;j<=m_real+m_fake;++j) { // fake,reals   m_real+m_fake
+        model.lp_.row_lower_.push_back(orders[j].obligation);
+        model.lp_.row_upper_.push_back(1);
+        
+        non_zeros += n*m;
+        model.lp_.a_matrix_.start_.push_back(non_zeros);
+        for(int i=1;i<=n;++i) {
+            for(int k=1;k<=m;++k) {
+                // A[cur][i][j][k] += 1;
+                model.lp_.a_matrix_.index_.push_back(get_3d_index(i,j,k));
+                model.lp_.a_matrix_.value_.push_back(1);
+            }
+        }
+    }           
+    for(int i=1;i<=n;++i) { // n*m*m
+        for(int j=1;j<=m;++j) {
+            for(int k=1;k<=m;++k) {
+                
+                model.lp_.row_lower_.push_back(0);
+                model.lp_.row_upper_.push_back(orders[k].start_time + 1); // ...+1 <= ...+1 
+
+                non_zeros += 1;
+                model.lp_.a_matrix_.start_.push_back(non_zeros);
+
+                // A[cur][i][j][k] += orders[j].finish_time + get_dist(orders[j].to_city, orders[k].from_city)/speed;
+                model.lp_.a_matrix_.index_.push_back(get_3d_index(i,j,k));
+                model.lp_.a_matrix_.value_.push_back(orders[j].finish_time + get_dist(orders[j].to_city, orders[k].from_city)/speed*60 + 1); // +1 so non zero
+            }
+        }
+    }    
+
 
     return model;
 }
@@ -392,7 +370,7 @@ bool checker(std::vector<std::vector<int>> &ans) {
 
                 cur_time += 1.0*d/speed * 60;
                 if(cur_time>ord.start_time) {
-                    std::cerr<<"error "<< ord.order_id<<": arrived too late" <<endl;
+                    std::cerr<<"error "<< ord.order_id<<": arrived too late ("<<cur_time<<") but order starts at "<<ord.start_time <<endl;
                     exit(1);
                 }
                 revenue -= 1.0*(ord.start_time - cur_time) * wait_cost / 60;

@@ -64,7 +64,7 @@ void parse_params(
     int &wait_cost
 ) {
     XLDocument doc;
-    doc.open("./../case_1/params_small.xlsx");
+    doc.open("./../case_1/params.xlsx");
     auto wks = doc.workbook().worksheet("Sheet1");
     bool header = 1;
     for (auto& row : wks.rows()) {
@@ -103,7 +103,7 @@ void parse_params(
 
 void parse_trucks(std::vector<truck> &trucks) {
     XLDocument doc;
-    doc.open("./../case_1/trucks_small.xlsx");
+    doc.open("./../case_1/trucks.xlsx");
     auto wks = doc.workbook().worksheet("Sheet1");
     bool header = 1;
     for (auto& row : wks.rows()) {
@@ -140,7 +140,7 @@ void parse_trucks(std::vector<truck> &trucks) {
 
 void parse_orders(std::vector<order> &orders) {
     XLDocument doc;
-    doc.open("./../case_1/orders_small.xlsx");
+    doc.open("./../case_1/orders.xlsx");
     auto wks = doc.workbook().worksheet("Sheet1");
     bool header = 1;
     for (auto& row : wks.rows()) {
@@ -191,7 +191,7 @@ void parse_orders(std::vector<order> &orders) {
 
 void parse_distances(std::map<std::pair<int,int>, int> &dists) {
     XLDocument doc;
-    doc.open("./../case_1/distances_small.xlsx");
+    doc.open("./../case_1/distances.xlsx");
     auto wks = doc.workbook().worksheet("Sheet1");
     bool header = 1;
     for (auto& row : wks.rows()) {
@@ -246,7 +246,7 @@ void parse(
         min_time = std::min(min_time, el.init_time);
         //std::cout<<el.truck_id<<" "<<el.type<<" "<<el.init_time<<" "<<el.init_city<<std::endl; 
     }
-    //trucks.resize(3);
+    trucks.resize(30);
     n = trucks.size() - 1;
     m_fake = n;
 
@@ -256,7 +256,7 @@ void parse(
         min_time = std::min(min_time, el.start_time);
         //std::cout<<el.order_id<<" "<<el.obligation<<" "<<el.start_time<<" "<<el.finish_time<<" "<<el.from_city<<" "<<el.to_city<<" "<<el.type<<" "<<el.distance<<" "<<el.revenue<<std::endl;
     }
-    //orders.resize(10);
+    orders.resize(122);
     m_real = orders.size() - 1;
 
     parse_distances(dists);
