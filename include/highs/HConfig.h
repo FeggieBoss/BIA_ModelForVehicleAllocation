@@ -1,0 +1,20 @@
+#ifndef HCONFIG_H_
+#define HCONFIG_H_
+
+#define FAST_BUILD
+#define ZLIB_FOUND
+#define CMAKE_BUILD_TYPE "RELEASE"
+#define CMAKE_INSTALL_PREFIX "/home/feggie/MyData/BIA"
+/* #undef HIGHSINT64 */
+#define HIGHS_HAVE_MM_PAUSE
+#define HIGHS_HAVE_BUILTIN_CLZ
+/* #undef HIGHS_HAVE_BITSCAN_REVERSE */
+
+#define HIGHS_GITHASH "77583e204"
+#define HIGHS_COMPILATION_DATE "2023-12-12"
+#define HIGHS_VERSION_MAJOR 1
+#define HIGHS_VERSION_MINOR 6
+#define HIGHS_VERSION_PATCH 0
+#define HIGHS_DIR "/home/feggie/MyData/BIA/HiGHS"
+
+#endif /* HCONFIG_H_ */
