@@ -219,6 +219,7 @@ void parse_distances(std::map<std::pair<int,int>, double> &dists) {
 
 void parse(data_t &data) {
     parse_params(data.params);
+    data.params.speed *= 2;
     //cout<<std::fixed<<std::setprecision(5)<<speed<<" "<<duty_km_cost<<" "<<duty_hour_cost<<" "<<free_km_cost<<" "<<free_hour_cost<<" "<<wait_cost<<endl;
     
     parse_trucks(data.trucks);
@@ -227,7 +228,7 @@ void parse(data_t &data) {
         data.min_time = std::min(data.min_time, el.init_time);
         //std::cout<<el.truck_id<<" "<<el.type<<" "<<el.init_time<<" "<<el.init_city<<std::endl; 
     }
-    data.trucks.resize(50);
+    data.trucks.resize(71);
     data.n = data.trucks.size() - 1;
 
     parse_orders(data.orders);
@@ -236,7 +237,7 @@ void parse(data_t &data) {
         data.min_time = std::min(data.min_time, el.start_time);
         //std::cout<<el.order_id<<" "<<el.obligation<<" "<<el.start_time<<" "<<el.finish_time<<" "<<el.from_city<<" "<<el.to_city<<" "<<el.type<<" "<<el.distance<<" "<<el.revenue<<std::endl;
     }
-    data.orders.resize(1000);
+    data.orders.resize(184);
     data.m_real = data.orders.size() - 1;
 
     parse_distances(data.dists);

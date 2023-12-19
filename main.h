@@ -41,8 +41,7 @@ struct data_t {
     int lst_city = 0;
     int min_time = INT_MAX;
     params_t params;
-    int inf = 1e6;
-    int inf_d = 4e5+5e4;
+    int inf_d = 1e6;
     std::map<std::pair<int,int>, double> dists; 
     std::vector<truck> trucks = {{0,"0",0,0}};
     std::vector<order> orders = {{0,0,0,0,0,0,"0",0,0}};

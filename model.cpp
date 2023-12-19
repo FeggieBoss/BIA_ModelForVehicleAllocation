@@ -11,8 +11,7 @@ static int m = 0;
 static int lst_city = 0;
 static int min_time = INT_MAX;
 static params_t params;
-static int inf = 1e6;
-static int inf_d = 4e5+5e4;
+static int inf_d = 0;
 
 
 int get_3d_index(int i, int j, int k) {
@@ -102,6 +101,17 @@ std::vector<std::vector<int>> solve(HighsModel &model) {
     return ans;
 }
 
+bool is_real(int i) {
+    return (1 <= i && i <= m_real);
+}
+bool is_fake(int i) {
+    return (m_real+1 <= i && i <= m_real+m_fake);
+}
+
+bool is_stop(int i) {
+    return (m_real+m_fake+1 <= i && i <= m_real+m_fake+m_stop);
+}
+
 HighsModel create_model(data_t &data) {
     n = data.n;
     m_real = data.m_real;
@@ -111,11 +121,8 @@ HighsModel create_model(data_t &data) {
     lst_city = data.lst_city;
     min_time = data.min_time;
     params = data.params;
-    inf = data.inf;
     inf_d = data.inf_d;
 
-
-    int any_city = data.trucks[1].init_city;
     for(int i=1;i<=n;++i) {
         data.orders.push_back(order{});
         data.orders.back().obligation = 1;
@@ -125,8 +132,7 @@ HighsModel create_model(data_t &data) {
         data.orders.back().type = data.trucks[i].type;
     }
     data.orders.push_back(order{});
-    data.orders.back().start_time = data.orders.back().finish_time = inf;
-    data.orders.back().from_city = any_city;
+    data.orders.back().from_city = lst_city+n+1;
     data.orders.back().to_city = lst_city+n+1;
     
     cout<<endl;
@@ -150,10 +156,10 @@ HighsModel create_model(data_t &data) {
         if(!ost_print) break;
     }
 
-    cout<<(n+1)*(m+1)*(m+1)<<endl;
+    cout<<"variables: "<<n*m*m<<endl;
     
     // c^Tx + d subject to L <= Ax <= U; l <= x <= u
-    const int nmm = n*m_real+m_real+m_fake+n*m*m;
+    const int nmm = (n*m_real)+(m_real+m_fake);
     HighsModel model;
     model.lp_.num_col_ = n*m*m;
     model.lp_.num_row_ = nmm;
@@ -194,6 +200,10 @@ HighsModel create_model(data_t &data) {
         }
     }
 
+    #ifdef NO_LONG_EDGES
+    int long_edges = 0;
+    #endif
+
     // l,u
     // model.lp_.col_lower_, model.lp_.col_upper_
     model.lp_.col_lower_.resize(n*m*m);
@@ -202,19 +212,42 @@ HighsModel create_model(data_t &data) {
         for(int j=1;j<=m;++j) {
             for(int k=1;k<=m;++k) {
                 int l = 0;
-                int u = (data.trucks[i].type == data.orders[j].type) && (j != k);
-                if(j>=m_real+1 && j<=m_real+m_fake) { // fake
-                    u &= (m_real+i) == j; // fake was made for him
+                int u = 1; 
+                if(j==k) { 
+                    u = 0;
+                } else if(data.trucks[i].type != data.orders[j].type) { // not same type
+                    u = 0;
+                } else if(is_fake(k)) { // fake is always start
+                    u = 0; 
+                } else if(is_fake(j) && (m_real+i) != j) { // fake && fake wasnt made for him
+                    u = 0;
+                } else if (!is_stop(k)) { 
+                    double t1 = data.orders[j].finish_time + 1.0 * get_dists(data.dists, data.orders[j].to_city, data.orders[k].from_city)/params.speed*60;
+                    double t2 = data.orders[k].start_time;
+                    u &= (t1<=t2); // possible to arrive
                 }
-                if(k>=m_real+1 && k<=m_real+m_fake) { // fake
-                    u = 0; // fake is always start
+
+                #ifdef NO_LONG_EDGES
+                double d = get_dists(data.dists, data.orders[j].to_city,data.orders[k].from_city);
+                if((is_fake(j)&&is_real(k))||(is_real(j)&&is_stop(k))||(is_fake(j)&&is_stop(k))) { // fake->real / real->stop / fake->stop
+                    d = 0;
                 }
+
+                if(d > NO_LONG_EDGES) {
+                    ++long_edges;
+                    u = 0;
+                }
+                #endif
 
                 model.lp_.col_lower_[get_3d_index(i,j,k)] = l;
                 model.lp_.col_upper_[get_3d_index(i,j,k)] = u;
             }
         }
     }
+
+    #ifdef NO_LONG_EDGES
+    cout<<"long edges: "<<long_edges<<endl;
+    #endif
 
     model.lp_.a_matrix_.format_ = MatrixFormat::kRowwise;
     
@@ -254,24 +287,8 @@ HighsModel create_model(data_t &data) {
             }
         }
     }           
-    for(int i=1;i<=n;++i) { // n*m*m
-        for(int j=1;j<=m;++j) {
-            for(int k=1;k<=m;++k) {
-                
-                model.lp_.row_lower_.push_back(0);
-                model.lp_.row_upper_.push_back(data.orders[k].start_time + 1); // ...+1 <= ...+1 
 
-                non_zeros += 1;
-                model.lp_.a_matrix_.start_.push_back(non_zeros);
-
-                // A[cur][i][j][k] += data.orders[j].finish_time + get_dists(data.dists, data.orders[j].to_city, data.orders[k].from_city)/params.speed;
-                model.lp_.a_matrix_.index_.push_back(get_3d_index(i,j,k));
-                model.lp_.a_matrix_.value_.push_back(data.orders[j].finish_time + get_dists(data.dists, data.orders[j].to_city, data.orders[k].from_city)/params.speed*60 + 1); // +1 so non zero
-            }
-        }
-    }    
-
-    cout<<non_zeros<<endl;
+    cout<<"non zeros: "<<non_zeros<<endl;
 
     return model;
 }

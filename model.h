@@ -1,6 +1,8 @@
 #ifndef _MODEL
 #define _MODEL
 
+#define NO_LONG_EDGES 1000
+
 #include "main.h"
 #include "Highs.h"
 
