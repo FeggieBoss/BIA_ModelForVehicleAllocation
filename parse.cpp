@@ -7,12 +7,13 @@ using std::endl;
 
 static int min_time = INT32_MAX;
 
-void set_num_value(XLCellValueProxy &v, int *ptr, bool &f, int fixer = 1) {
-    int x;
+template<typename T>
+void set_num_value(XLCellValueProxy &v, T *ptr, bool &f) {
+    T x;
     switch (v.type())
     {
     case XLValueType::Float:
-        x = v.get<float>() * fixer;
+        x = v.get<float>();
         break;
     
     case XLValueType::Integer:
@@ -28,7 +29,8 @@ void set_num_value(XLCellValueProxy &v, int *ptr, bool &f, int fixer = 1) {
     *ptr = x;
 }
 
-void set_time_value(XLCellValueProxy &v, int *ptr, bool &f, int fixer = 1) {
+
+void set_time_value(XLCellValueProxy &v, int *ptr, bool &f) {
     int x;
     switch (v.type())
     {
@@ -55,14 +57,7 @@ void set_time_value(XLCellValueProxy &v, int *ptr, bool &f, int fixer = 1) {
     *ptr = x;
 }
 
-void parse_params(
-    int &speed,  
-    int &free_km_cost, 
-    int &free_hour_cost,
-    int &duty_km_cost, 
-    int &duty_hour_cost,
-    int &wait_cost
-) {
+void parse_params(params_t &params) {
     XLDocument doc;
     doc.open("./../case_1/params.xlsx");
     auto wks = doc.workbook().worksheet("Sheet1");
@@ -82,17 +77,17 @@ void parse_params(
 
         bool fl = false;
         if(name=="VELOCITY") {
-            set_num_value((*it).value(), &speed, fl, params_fixer);
+            set_num_value((*it).value(), &params.speed, fl);
         } else if(name=="TRIP_KM_PRICE") {
-            set_num_value((*it).value(), &duty_km_cost, fl, params_fixer);
+            set_num_value((*it).value(), &params.duty_km_cost, fl);
         } else if(name=="TRIP_HOUR_PRICE") {
-            set_num_value((*it).value(), &duty_hour_cost, fl, params_fixer);
+            set_num_value((*it).value(), &params.duty_hour_cost, fl);
         } else if(name=="IDLE_RUN_KM_PRICE") {
-            set_num_value((*it).value(), &free_km_cost, fl, params_fixer);
+            set_num_value((*it).value(), &params.free_km_cost, fl);
         } else if(name=="IDLE_RUN_HOUR_PRICE") {
-            set_num_value((*it).value(), &free_hour_cost, fl, params_fixer);
+            set_num_value((*it).value(), &params.free_hour_cost, fl);
         } else if(name=="REST_HOUR_PRICE") {
-            set_num_value((*it).value(), &wait_cost, fl, params_fixer);
+            set_num_value((*it).value(), &params.wait_cost, fl);
         }
 
         if(fl) {
@@ -177,10 +172,10 @@ void parse_orders(std::vector<order> &orders) {
         orders.back().type += ((*it).value()).get<std::string>(); ++it;
 
 
-        set_num_value((*it).value(), &orders.back().distance, fl, distance_fixer);
+        set_num_value((*it).value(), &orders.back().distance, fl);
         ++it;
 
-        set_num_value((*it).value(), &orders.back().revenue, fl, revenue_fixer);
+        set_num_value((*it).value(), &orders.back().revenue, fl);
 
         if(fl || orders.back().start_time >= orders.back().finish_time) {
             orders.pop_back();
@@ -189,7 +184,7 @@ void parse_orders(std::vector<order> &orders) {
     }
 }
 
-void parse_distances(std::map<std::pair<int,int>, int> &dists) {
+void parse_distances(std::map<std::pair<int,int>, double> &dists) {
     XLDocument doc;
     doc.open("./../case_1/distances.xlsx");
     auto wks = doc.workbook().worksheet("Sheet1");
@@ -205,14 +200,15 @@ void parse_distances(std::map<std::pair<int,int>, int> &dists) {
             break;
         }
 
-        int from, to, d;
+        int from, to;
+        double d;
 
         bool fl = false;
 
-        set_num_value((*it).value(), &from, fl, distance_fixer); ++it;
-        set_num_value((*it).value(), &to, fl, distance_fixer); ++it;
+        set_num_value((*it).value(), &from, fl); ++it;
+        set_num_value((*it).value(), &to, fl); ++it;
         if(it==row.cells().end()) continue;
-        set_num_value((*it).value(), &d, fl, distance_fixer);
+        set_num_value((*it).value(), &d, fl);
 
         if(fl) continue;
 
@@ -221,58 +217,42 @@ void parse_distances(std::map<std::pair<int,int>, int> &dists) {
 }
 
 
-void parse(
-    int &speed,  
-    int &free_km_cost, 
-    int &free_hour_cost,
-    int &duty_km_cost, 
-    int &duty_hour_cost,
-    int &wait_cost,
-    int &n, 
-    std::vector<truck> &trucks, 
-    int &m_real,
-    int &m_fake,
-    int &m_stop,
-    std::vector<order> &orders,
-    std::map<std::pair<int,int>, int> &dists,
-    int &lst_city
-) {
-    parse_params(speed, free_km_cost, free_hour_cost, duty_km_cost, duty_hour_cost, wait_cost);
+void parse(data_t &data) {
+    parse_params(data.params);
     //cout<<std::fixed<<std::setprecision(5)<<speed<<" "<<duty_km_cost<<" "<<duty_hour_cost<<" "<<free_km_cost<<" "<<free_hour_cost<<" "<<wait_cost<<endl;
     
-    parse_trucks(trucks);
-    for(auto&el : trucks) {
+    parse_trucks(data.trucks);
+    for(auto&el : data.trucks) {
         if(el.truck_id==0) continue;
-        min_time = std::min(min_time, el.init_time);
+        data.min_time = std::min(data.min_time, el.init_time);
         //std::cout<<el.truck_id<<" "<<el.type<<" "<<el.init_time<<" "<<el.init_city<<std::endl; 
     }
-    trucks.resize(30);
-    n = trucks.size() - 1;
-    m_fake = n;
+    data.trucks.resize(50);
+    data.n = data.trucks.size() - 1;
 
-    parse_orders(orders);
-    for(auto&el : orders) {
+    parse_orders(data.orders);
+    for(auto&el : data.orders) {
         if(el.order_id==0) continue;
-        min_time = std::min(min_time, el.start_time);
+        data.min_time = std::min(data.min_time, el.start_time);
         //std::cout<<el.order_id<<" "<<el.obligation<<" "<<el.start_time<<" "<<el.finish_time<<" "<<el.from_city<<" "<<el.to_city<<" "<<el.type<<" "<<el.distance<<" "<<el.revenue<<std::endl;
     }
-    orders.resize(122);
-    m_real = orders.size() - 1;
+    data.orders.resize(1000);
+    data.m_real = data.orders.size() - 1;
 
-    parse_distances(dists);
-    for(auto&el : dists) {
-        lst_city = std::max(lst_city, el.first.first); 
-        lst_city = std::max(lst_city, el.first.second); 
+    parse_distances(data.dists);
+    for(auto&el : data.dists) {
+        data.lst_city = std::max(data.lst_city, el.first.first); 
+        data.lst_city = std::max(data.lst_city, el.first.second); 
         //cout<<"("<<el.first.first<<","<<el.first.second<<") "<<el.second<<endl;
     }
 
-    for(auto&el : trucks) {
+    for(auto&el : data.trucks) {
         if(el.truck_id==0) continue;
-        el.init_time -= min_time;
+        el.init_time -= data.min_time;
     }
-    for(auto&el : orders) {
+    for(auto&el : data.orders) {
         if(el.order_id==0) continue;
-        el.start_time -= min_time;
-        el.finish_time -= min_time;
+        el.start_time -= data.min_time;
+        el.finish_time -= data.min_time;
     }
 }
