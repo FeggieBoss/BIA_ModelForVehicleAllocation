@@ -212,46 +212,76 @@ void parse_distances(std::map<std::pair<int,int>, double> &dists) {
 
         if(fl) continue;
 
-        dists[{from,to}] = d / 1000;        
+        dists[{from,to}] = d / 1000;      
     }
 }
 
 
 void parse(data_t &data) {
     parse_params(data.params);
-    data.params.speed *= 2;
+    //data.params.speed *= 2;
     //cout<<std::fixed<<std::setprecision(5)<<speed<<" "<<duty_km_cost<<" "<<duty_hour_cost<<" "<<free_km_cost<<" "<<free_hour_cost<<" "<<wait_cost<<endl;
     
     parse_trucks(data.trucks);
-    for(auto&el : data.trucks) {
+    {
+        // int special = 9;
+        // sort(data.trucks.begin()+1,data.trucks.end(),[](auto &a, auto &b) {
+        //     auto foo = [](int i) {return (i==70||i==1036||i==1076||i==1088||i==396||i==472||i==596||i==1447||i==305);};
+        //     bool fa = foo(a.truck_id);
+        //     bool fb = foo(b.truck_id);
+        //     if(fa) {
+        //         return !fb;
+        //     } else {
+        //         return false;
+        //     }
+        // });
+        // sort(data.trucks.begin()+1+special,data.trucks.end(),[](auto &a, auto &b) {
+        //         bool fa = a.type == "Задняя, Тент";
+        //         bool fb = b.type == "Задняя, Тент";
+        //         if(fa) {
+        //             return !fb;
+        //         } else {
+        //             return false;
+        //         }
+        // });
+    }
+    for(auto &el : data.trucks) {
         if(el.truck_id==0) continue;
         data.min_time = std::min(data.min_time, el.init_time);
         //std::cout<<el.truck_id<<" "<<el.type<<" "<<el.init_time<<" "<<el.init_city<<std::endl; 
     }
-    data.trucks.resize(71);
+    data.trucks.resize(300);
+    cout<<data.trucks.back().type<<endl;
     data.n = data.trucks.size() - 1;
 
     parse_orders(data.orders);
-    for(auto&el : data.orders) {
+    {
+        for(auto &el : data.orders) {
+            if(el.obligation) {
+                el.obligation = 0;
+            }
+        }
+    }
+    for(auto &el : data.orders) {
         if(el.order_id==0) continue;
         data.min_time = std::min(data.min_time, el.start_time);
         //std::cout<<el.order_id<<" "<<el.obligation<<" "<<el.start_time<<" "<<el.finish_time<<" "<<el.from_city<<" "<<el.to_city<<" "<<el.type<<" "<<el.distance<<" "<<el.revenue<<std::endl;
     }
-    data.orders.resize(184);
+    data.orders.resize(1200);
     data.m_real = data.orders.size() - 1;
 
     parse_distances(data.dists);
-    for(auto&el : data.dists) {
+    for(auto &el : data.dists) {
         data.lst_city = std::max(data.lst_city, el.first.first); 
         data.lst_city = std::max(data.lst_city, el.first.second); 
         //cout<<"("<<el.first.first<<","<<el.first.second<<") "<<el.second<<endl;
     }
 
-    for(auto&el : data.trucks) {
+    for(auto &el : data.trucks) {
         if(el.truck_id==0) continue;
         el.init_time -= data.min_time;
     }
-    for(auto&el : data.orders) {
+    for(auto &el : data.orders) {
         if(el.order_id==0) continue;
         el.start_time -= data.min_time;
         el.finish_time -= data.min_time;

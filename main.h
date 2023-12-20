@@ -1,6 +1,8 @@
 #ifndef _MAIN
 #define _MAIN
 
+#include "Highs.h"
+
 #include <string>
 #include <vector>
 #include <map>
@@ -45,6 +47,18 @@ struct data_t {
     std::map<std::pair<int,int>, double> dists; 
     std::vector<truck> trucks = {{0,"0",0,0}};
     std::vector<order> orders = {{0,0,0,0,0,0,"0",0,0}};
+};
+
+struct variable_t {
+    int column;
+    int i;
+    int j;
+    int k;
+};
+
+struct model_t {
+    HighsModel model;
+    std::vector<variable_t> variables;
 };
 
 #endif // _MAIN

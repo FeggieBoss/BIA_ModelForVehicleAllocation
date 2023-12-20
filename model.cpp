@@ -14,8 +14,14 @@ static params_t params;
 static int inf_d = 0;
 
 
-int get_3d_index(int i, int j, int k) {
-    return i+(j+(k-1)*m - 1)*n - 1;
+int get_1d_index(int i, int j, int k) {
+    return k+(j+(i-1)*m - 1)*m - 1;
+} 
+
+void get_3d_index(int x, int &i, int &j, int &k) {
+    k = (x%m)+1;   
+    j = (x/m)%m+1;
+    i = (x/m)/m+1;
 }
 
 double get_dists(std::map<std::pair<int,int>, double> &dists, int from, int to) {
@@ -31,7 +37,26 @@ double get_dists(std::map<std::pair<int,int>, double> &dists, int from, int to) 
     }
 }
 
-std::vector<std::vector<int>> solve(HighsModel &model) {
+bool is_real(int i) {
+    return (1 <= i && i <= m_real);
+}
+bool is_fake(int i) {
+    return (m_real+1 <= i && i <= m_real+m_fake);
+}
+
+bool is_stop(int i) {
+    return (m_real+m_fake+1 <= i && i <= m_real+m_fake+m_stop);
+}
+
+bool is_zero(int i, std::unordered_map<int, int> &non_zeros) {
+    auto it = non_zeros.find(i);
+    if(it==non_zeros.end()) {
+        return true;
+    }
+    return false;
+}
+
+std::vector<int> solve(HighsModel &model) {
     Highs highs;
     HighsStatus return_status;
     
@@ -85,34 +110,17 @@ std::vector<std::vector<int>> solve(HighsModel &model) {
     return_status = highs.run();
     assert(return_status==HighsStatus::kOk);
     
-    std::vector<std::vector<int>> ans(n);
+    std::vector<int> ans;
     for (int col=0; col < lp.num_col_; col++) {
         if (info.primal_solution_status && solution.col_value[col]) {
-            cout << "Column " << col;
-            cout << "; to_(i="<<(col%n)+1<<")_(j="<<(col/n)%m+1<<")_(k="<<(col/n)/m+1<<")"; 
-            if (info.primal_solution_status) cout << "; value = " << solution.col_value[col];
-            cout << endl;
-            
-            if((col/n)%m+1 < m - m_stop + 1)
-                ans[col%n].push_back((col/n)%m+1);
+            ans.push_back(col);
         }
     }
 
     return ans;
 }
 
-bool is_real(int i) {
-    return (1 <= i && i <= m_real);
-}
-bool is_fake(int i) {
-    return (m_real+1 <= i && i <= m_real+m_fake);
-}
-
-bool is_stop(int i) {
-    return (m_real+m_fake+1 <= i && i <= m_real+m_fake+m_stop);
-}
-
-HighsModel create_model(data_t &data) {
+model_t create_model(data_t &data) {
     n = data.n;
     m_real = data.m_real;
     m_fake = data.n;
@@ -139,7 +147,7 @@ HighsModel create_model(data_t &data) {
     cout<<std::fixed<<std::setprecision(5)<<params.speed<<" "<<params.duty_km_cost<<" "<<params.duty_hour_cost<<" "<<params.free_km_cost<<" "<<params.free_hour_cost<<" "<<params.wait_cost<<endl;
     
     cout<<endl;
-    int ost_print=10;
+    int ost_print=20;
     for(auto&el : data.trucks) {
         cout<<el.truck_id<<" "<<el.type<<" "<<el.init_time<<" "<<el.init_city<<endl; 
 
@@ -156,24 +164,95 @@ HighsModel create_model(data_t &data) {
         if(!ost_print) break;
     }
 
-    cout<<"variables: "<<n*m*m<<endl;
     
     // c^Tx + d subject to L <= Ax <= U; l <= x <= u
-    const int nmm = (n*m_real)+(m_real+m_fake);
+    int num_row = 0;
     HighsModel model;
-    model.lp_.num_col_ = n*m*m;
-    model.lp_.num_row_ = nmm;
-
     model.lp_.sense_ = ObjSense::kMaximize;
-
     model.lp_.offset_ = 0;
 
-    // c 
-    // model.lp_.col_cost_
-    model.lp_.col_cost_.resize(n*m*m);
+    std::unordered_map<int, int> non_zeros;
+    std::vector<variable_t> variables;
+
+    // l,u
+    // model.lp_.col_lower_, model.lp_.col_upper_
+    #ifdef NO_LONG_EDGES
+    int no_long_edges = 0;
+    #endif
+    #ifdef COMPLETE_GRAPH
+    int complete_graph=0;
+    #endif
     for(int i=1;i<=n;++i) {
         for(int j=1;j<=m;++j) {
             for(int k=1;k<=m;++k) {
+                int l = 0;
+                int u = 1; 
+                if(j==k) { 
+                    u = 0;
+                } else if(data.trucks[i].type != data.orders[j].type) {
+                    u = 0; 
+                } else if(is_fake(j) && (m_real+i) != j) { // fake && fake wasnt made for him
+                    u = 0;
+                } else {
+                    double t1,t2;                    
+                    if (!is_stop(k)) { 
+                        t1 = data.orders[j].finish_time + 1.0 * get_dists(data.dists, data.orders[j].to_city, data.orders[k].from_city)/params.speed*60;
+                        t2 = data.orders[k].start_time;
+                        u &= (t1<=t2); // possible to arrive to k after j
+                    }
+
+                    #ifdef COMPLETE_GRAPH
+                    if (u && !is_fake(j)) {
+                        t1 = data.orders[m_real+i].finish_time + 1.0 * get_dists(data.dists, data.orders[m_real+i].to_city, data.orders[j].from_city)/params.speed*60;
+                        t2 = data.orders[j].start_time;
+                        u &= (t1<=t2); // possible to arrive to j straight from initial place (true for any order - not necessary start)
+                        complete_graph += (t1>t2);
+                    }
+                    #endif
+                }
+
+                #ifdef NO_LONG_EDGES
+                if(u!=0) {
+                    double d = get_dists(data.dists, data.orders[j].to_city,data.orders[k].from_city);
+                    if((is_fake(j)&&is_real(k))||(is_real(j)&&is_stop(k))||(is_fake(j)&&is_stop(k))) { // fake->real / real->stop / fake->stop
+                        d = 0;
+                    }
+
+                    if(d > NO_LONG_EDGES) {
+                        ++no_long_edges;
+                        u = 0;
+                    }
+                }
+                #endif
+                
+                if(u!=0) {
+                    non_zeros.emplace(get_1d_index(i,j,k), model.lp_.col_lower_.size());
+                    variables.push_back({(int)model.lp_.col_lower_.size(), i, j, k});
+
+                    model.lp_.col_lower_.push_back(l);
+                    model.lp_.col_upper_.push_back(u);
+                }
+            }
+        }
+    }
+    #ifdef NO_LONG_EDGES
+    cout << "[flag]no long edges: " << no_long_edges << " (out of " << n*m*m << ")" << endl;
+    #endif
+    #ifdef COMPLETE_GRAPH
+    cout << "[flag]complete graph: " << complete_graph << " (out of " << n*m*m << ")" << endl;
+    #endif
+    cout << "non zero variables: " << non_zeros.size() << " (out of " << n*m*m << ")" << endl;
+
+    cout << "variables: " << non_zeros.size() << endl;
+    model.lp_.num_col_ = non_zeros.size();
+
+    // c 
+    // model.lp_.col_cost_
+    for(int i=1;i<=n;++i) {
+        for(int j=1;j<=m;++j) {
+            for(int k=1;k<=m;++k) {
+                if(is_zero(get_1d_index(i,j,k), non_zeros)) continue;
+
                 double c = 0;
 
                 // revenue sum
@@ -195,106 +274,87 @@ HighsModel create_model(data_t &data) {
                     // waiting
                     c -= 1.0 * ((data.orders[k].start_time - data.orders[j].finish_time) - ((double)get_dists(data.dists, data.orders[j].to_city,data.orders[k].from_city)/params.speed * 60))*params.wait_cost / 60;
                 }
-                model.lp_.col_cost_[get_3d_index(i,j,k)] = c;
+                model.lp_.col_cost_.push_back(c);
             }
         }
     }
-
-    #ifdef NO_LONG_EDGES
-    int long_edges = 0;
-    #endif
-
-    // l,u
-    // model.lp_.col_lower_, model.lp_.col_upper_
-    model.lp_.col_lower_.resize(n*m*m);
-    model.lp_.col_upper_.resize(n*m*m);
-    for(int i=1;i<=n;++i) {
-        for(int j=1;j<=m;++j) {
-            for(int k=1;k<=m;++k) {
-                int l = 0;
-                int u = 1; 
-                if(j==k) { 
-                    u = 0;
-                } else if(data.trucks[i].type != data.orders[j].type) { // not same type
-                    u = 0;
-                } else if(is_fake(k)) { // fake is always start
-                    u = 0; 
-                } else if(is_fake(j) && (m_real+i) != j) { // fake && fake wasnt made for him
-                    u = 0;
-                } else if (!is_stop(k)) { 
-                    double t1 = data.orders[j].finish_time + 1.0 * get_dists(data.dists, data.orders[j].to_city, data.orders[k].from_city)/params.speed*60;
-                    double t2 = data.orders[k].start_time;
-                    u &= (t1<=t2); // possible to arrive
-                }
-
-                #ifdef NO_LONG_EDGES
-                double d = get_dists(data.dists, data.orders[j].to_city,data.orders[k].from_city);
-                if((is_fake(j)&&is_real(k))||(is_real(j)&&is_stop(k))||(is_fake(j)&&is_stop(k))) { // fake->real / real->stop / fake->stop
-                    d = 0;
-                }
-
-                if(d > NO_LONG_EDGES) {
-                    ++long_edges;
-                    u = 0;
-                }
-                #endif
-
-                model.lp_.col_lower_[get_3d_index(i,j,k)] = l;
-                model.lp_.col_upper_[get_3d_index(i,j,k)] = u;
-            }
-        }
-    }
-
-    #ifdef NO_LONG_EDGES
-    cout<<"long edges: "<<long_edges<<endl;
-    #endif
 
     model.lp_.a_matrix_.format_ = MatrixFormat::kRowwise;
     
-    // A, L, U
-    int non_zeros = 0;
-    for(int i=1;i<=n;++i) { // n*m_real
+    // A
+    // L, U
+    // model.lp_.a_matrix_.start_, model.lp_.a_matrix_.index_, model.lp_.a_matrix_.value_
+    // model.lp_.row_lower_, model.lp_.row_upper_
+    int a_matrix_non_zeros = 0;
+    for(int i=1;i<=n;++i) {
         for(int j=1;j<=m_real;++j) { // reals
+            std::vector<std::pair<int,int>> non_zeros_cur;
+            for(int k=1;k<=m;++k) {
+                int idx1 = get_1d_index(i,j,k);
+                int idx2 = get_1d_index(i,k,j);
+                if(k==j) continue;
+                if(!is_zero(idx1,non_zeros))
+                    non_zeros_cur.emplace_back(non_zeros[idx1], 1); // A[i][k][j] += 1;
+                if(!is_zero(idx2,non_zeros))
+                    non_zeros_cur.emplace_back(non_zeros[idx2],-1); // A[i][k][j] -= 1;
+            }
+            if(non_zeros_cur.empty()) continue;
+
+            ++num_row;
+
             model.lp_.row_lower_.push_back(0);
             model.lp_.row_upper_.push_back(0);
 
-            non_zeros += 2*(m-1);
-            model.lp_.a_matrix_.start_.push_back(non_zeros);
-            for(int k=1;k<=m;++k) {
-                if(k==j) continue;
-
-                // A[i][k][j] += 1;
-                model.lp_.a_matrix_.index_.push_back(get_3d_index(i,k,j));
-                model.lp_.a_matrix_.value_.push_back(1);
-                
-                // A[i][j][k] -= 1;
-                model.lp_.a_matrix_.index_.push_back(get_3d_index(i,j,k));
-                model.lp_.a_matrix_.value_.push_back(-1);
+            a_matrix_non_zeros += non_zeros_cur.size();
+            model.lp_.a_matrix_.start_.push_back(a_matrix_non_zeros);
+            
+            sort(non_zeros_cur.begin(),non_zeros_cur.end());
+            for(auto &el : non_zeros_cur) {
+                model.lp_.a_matrix_.index_.push_back(el.first);
+                model.lp_.a_matrix_.value_.push_back(el.second);
             }
         }
     }
-    for(int j=1;j<=m_real+m_fake;++j) { // fake,reals   m_real+m_fake
-        model.lp_.row_lower_.push_back(data.orders[j].obligation);
-        model.lp_.row_upper_.push_back(1);
-        
-        non_zeros += n*m;
-        model.lp_.a_matrix_.start_.push_back(non_zeros);
+    for(int j=1;j<=m_real+m_fake;++j) { // fake,reals          
+        int non_zeros_cur = 0;
         for(int i=1;i<=n;++i) {
             for(int k=1;k<=m;++k) {
+                int idx = get_1d_index(i,j,k);
+                if(is_zero(idx,non_zeros)) continue;
+
                 // A[cur][i][j][k] += 1;
-                model.lp_.a_matrix_.index_.push_back(get_3d_index(i,j,k));
+                model.lp_.a_matrix_.index_.push_back(non_zeros[idx]);
                 model.lp_.a_matrix_.value_.push_back(1);
+
+                ++non_zeros_cur;
             }
         }
+        if(!non_zeros_cur) {
+            if(data.orders[j].obligation) {
+                std::cerr<<"There is no single truck with type: "<<data.orders[j].type<<" to make obligation order "<<data.orders[j].order_id<<endl;
+                //exit(1);
+            }
+            continue;
+        }
+
+        ++num_row;
+
+        model.lp_.row_lower_.push_back(data.orders[j].obligation);
+        model.lp_.row_upper_.push_back(1);
+
+        a_matrix_non_zeros += non_zeros_cur;
+        model.lp_.a_matrix_.start_.push_back(a_matrix_non_zeros);
     }           
 
-    cout<<"non zeros: "<<non_zeros<<endl;
-
-    return model;
+    model.lp_.num_row_ = num_row;
+    cout<<"num row: "<<num_row<<endl;
+    cout<<"non zeros: "<<a_matrix_non_zeros<<endl;
+    
+    return {model, variables};
 }
 
 bool checker(std::vector<std::vector<int>> &ans, std::vector<truck> &trucks, std::vector<order> &orders, std::map<std::pair<int,int>, double> &dists) {
-    std::map<int, bool> oblig_orders;
+    std::map<int, int> oblig_orders;
 
     double revenue = 0;
     for(int i=0;i<ans.size();++i) {
@@ -318,7 +378,7 @@ bool checker(std::vector<std::vector<int>> &ans, std::vector<truck> &trucks, std
         int cur_time = t.init_time;
         for(auto &el : ans[i]) {
             order ord = orders[el];
-            if(ord.obligation && ord.order_id) oblig_orders[ord.order_id] = 1;
+            if(ord.obligation && ord.order_id) oblig_orders[ord.order_id] = t.truck_id;
 
             if(ord.order_id > 0) {       
                 double d = get_dists(dists, prev.to_city, ord.from_city);
@@ -359,7 +419,7 @@ bool checker(std::vector<std::vector<int>> &ans, std::vector<truck> &trucks, std
             if(it==oblig_orders.end()) {
                 cout<<"error: order "<<ord.order_id<<" wasnt scheduled but its obligation one"<<endl;
             }
-            else cout<<"obligation order "<<ord.order_id<<" sucessfully done"<<endl;
+            else cout<<"obligation order "<<ord.order_id<<" sucessfully done by "<<it->second<<endl;
         }
     }
 
