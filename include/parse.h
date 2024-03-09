@@ -6,6 +6,7 @@
 
 #include "main.h"
 
+
 void parse_params(params_t &params);
 void parse_trucks(std::vector<truck> &trucks);
 void parse_orders(std::vector<order> &orders);

@@ -1,3 +1,4 @@
+cmake_minimum_required(VERSION 3.1)
 project(month_schedule LANGUAGES CXX)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -15,6 +16,16 @@ find_package(Threads REQUIRED)
 
 add_subdirectory(OpenXLSX)
 
-add_executable(main main.cpp parse.cpp model.cpp)
+include_directories(include)
+add_executable(main 
+    src/main.cpp 
+    src/xlsx_cell.cpp
+    src/params.cpp
+    src/trucks.cpp
+    src/orders.cpp
+    src/distances.cpp
+    src/data.cpp
+    src/checker.cpp
+)
 target_link_libraries(main highs::highs)
 target_link_libraries(main OpenXLSX::OpenXLSX)

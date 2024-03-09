@@ -29,37 +29,9 @@ void set_num_value(XLCellValueProxy &v, T *ptr, bool &f) {
     *ptr = x;
 }
 
-
-void set_time_value(XLCellValueProxy &v, int *ptr, bool &f) {
-    int x;
-    switch (v.type())
-    {
-    case XLValueType::Float: {
-        tm t = v.get<XLDateTime>().tm();
-        x = (mktime(&t)+59)/60;
-        break;
-    }
-    
-    case XLValueType::Integer: {
-        long long y = (1LL * (v.get<int>()) * 24 * 60 * 60 - serial_unix_offset);
-        tm t = *std::gmtime(reinterpret_cast<time_t*>(&y));
-        x = (mktime(&t)+59)/60;
-        //std::cout<<ctime(reinterpret_cast<time_t*>(&y))<<std::endl;
-        break;
-    }
-    
-    default:
-        //std::cerr << "not expected type " << v.typeAsString() << " in set_time_value" << std::endl;
-        //std::cerr << v.get<std::string>()<<std::endl;
-        f = true;
-        return;
-    }
-    *ptr = x;
-}
-
 void parse_params(params_t &params) {
     XLDocument doc;
-    doc.open("./../case_1/params.xlsx");
+    doc.open("./../case_1/params_small.xlsx");
     auto wks = doc.workbook().worksheet("Sheet1");
     bool header = 1;
     for (auto& row : wks.rows()) {
@@ -98,7 +70,7 @@ void parse_params(params_t &params) {
 
 void parse_trucks(std::vector<truck> &trucks) {
     XLDocument doc;
-    doc.open("./../case_1/trucks.xlsx");
+    doc.open("./../case_1/trucks_small.xlsx");
     auto wks = doc.workbook().worksheet("Sheet1");
     bool header = 1;
     for (auto& row : wks.rows()) {
@@ -135,7 +107,7 @@ void parse_trucks(std::vector<truck> &trucks) {
 
 void parse_orders(std::vector<order> &orders) {
     XLDocument doc;
-    doc.open("./../case_1/orders.xlsx");
+    doc.open("./../case_1/orders_small.xlsx");
     auto wks = doc.workbook().worksheet("Sheet1");
     bool header = 1;
     for (auto& row : wks.rows()) {
@@ -186,7 +158,7 @@ void parse_orders(std::vector<order> &orders) {
 
 void parse_distances(std::map<std::pair<int,int>, double> &dists) {
     XLDocument doc;
-    doc.open("./../case_1/distances.xlsx");
+    doc.open("./../case_1/distances_small.xlsx");
     auto wks = doc.workbook().worksheet("Sheet1");
     bool header = 1;
     for (auto& row : wks.rows()) {
@@ -250,7 +222,7 @@ void parse(data_t &data) {
         data.min_time = std::min(data.min_time, el.init_time);
         //std::cout<<el.truck_id<<" "<<el.type<<" "<<el.init_time<<" "<<el.init_city<<std::endl; 
     }
-    data.trucks.resize(300);
+    //data.trucks.resize(300);
     cout<<data.trucks.back().type<<endl;
     data.n = data.trucks.size() - 1;
 
@@ -267,7 +239,7 @@ void parse(data_t &data) {
         data.min_time = std::min(data.min_time, el.start_time);
         //std::cout<<el.order_id<<" "<<el.obligation<<" "<<el.start_time<<" "<<el.finish_time<<" "<<el.from_city<<" "<<el.to_city<<" "<<el.type<<" "<<el.distance<<" "<<el.revenue<<std::endl;
     }
-    data.orders.resize(1200);
+    //data.orders.resize(1200);
     data.m_real = data.orders.size() - 1;
 
     parse_distances(data.dists);

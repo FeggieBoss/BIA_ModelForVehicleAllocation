@@ -1,6 +1,13 @@
 #ifndef _MAIN
 #define _MAIN
 
+#define DEBUG_MODE
+
+#ifdef DEBUG_MODE
+#include <iostream>
+#include <iomanip>
+#endif
+
 #include "Highs.h"
 
 #include <string>

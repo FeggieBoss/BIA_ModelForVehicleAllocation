@@ -294,7 +294,7 @@ model_t create_model(data_t &data) {
                 int idx2 = get_1d_index(i,k,j);
                 if(k==j) continue;
                 if(!is_zero(idx1,non_zeros))
-                    non_zeros_cur.emplace_back(non_zeros[idx1], 1); // A[i][k][j] += 1;
+                    non_zeros_cur.emplace_back(non_zeros[idx1], 1); // A[i][j][k] += 1;
                 if(!is_zero(idx2,non_zeros))
                     non_zeros_cur.emplace_back(non_zeros[idx2],-1); // A[i][k][j] -= 1;
             }
@@ -356,6 +356,7 @@ model_t create_model(data_t &data) {
 bool checker(std::vector<std::vector<int>> &ans, std::vector<truck> &trucks, std::vector<order> &orders, std::map<std::pair<int,int>, double> &dists) {
     std::map<int, int> oblig_orders;
 
+    int complete_orders_count = 0;
     double revenue = 0;
     for(int i=0;i<ans.size();++i) {
         truck t = trucks[i+1];
@@ -370,6 +371,7 @@ bool checker(std::vector<std::vector<int>> &ans, std::vector<truck> &trucks, std
         for(auto &el : ans[i]) {
             if(orders[el].order_id > 0) {
                 cout<<orders[el].order_id<<", ";
+                ++complete_orders_count;
             }
         }
         cout<<"}"<<endl;
@@ -413,8 +415,11 @@ bool checker(std::vector<std::vector<int>> &ans, std::vector<truck> &trucks, std
         }
     }
 
+    int complete_obligation_orders_count = 0;
     for(auto &ord : orders) {
         if(ord.obligation && ord.order_id) {
+            ++complete_obligation_orders_count;
+
             auto it = oblig_orders.find(ord.order_id);
             if(it==oblig_orders.end()) {
                 cout<<"error: order "<<ord.order_id<<" wasnt scheduled but its obligation one"<<endl;
@@ -424,6 +429,7 @@ bool checker(std::vector<std::vector<int>> &ans, std::vector<truck> &trucks, std
     }
 
     cout<<std::fixed<<std::setprecision(5)<<"total revenue: "<< revenue << endl;
+    cout<<"completed "<<complete_orders_count<<" orders where "<<complete_obligation_orders_count<<" were obligation ones"<<endl;
 
     return true;
 }

@@ -1,0 +1,117 @@
+#include "checker.h"
+
+#ifdef DEBUG_MODE
+using std::cout;
+using std::endl;
+#endif
+
+Checker::Checker(const Data& data) : data_(data) {}
+
+void Checker::SetSolution(const solution_t& solution) {
+    solution_ = solution;
+}
+
+std::optional<double> Checker::Check() {
+    #ifdef DEBUG_MODE
+    cout << "##SOLUTION_DEBUG" << endl;
+    #endif
+
+    std::set<int> obligation_orders;
+    auto& orders_by_truck = solution_.orders_by_truck;
+    auto& params = data_.params;
+    auto& trucks = data_.trucks;
+    auto& orders = data_.orders;
+    auto& dists = data_.dists;
+
+
+    assert(trucks.Size() == orders_by_truck.size());
+
+    int complete_orders_count = 0;
+    double summary_revenue = 0;
+    for(size_t i=0;i<orders_by_truck.size();++i) {
+        auto &scheduled_orders = orders_by_truck[i];
+        complete_orders_count += scheduled_orders.size();
+
+        Truck truck = trucks.GetTruck(i);
+
+        #ifdef DEBUG_MODE
+        cout << "truck(" << truck.truck_id << "): {";
+        for (size_t j = 0; j < scheduled_orders.size(); ++j) {
+            cout << orders.GetOrder(scheduled_orders[j]).order_id;
+            if (j + 1 != scheduled_orders.size()) {
+                cout << ", ";
+            }
+        }
+        cout << "}" << endl;
+
+        cout << "initial time(" << truck.init_time << "), city(" << truck.init_city << ")" << endl;
+        #endif
+
+        Order previous;
+        previous.finish_time = truck.init_time;
+        previous.to_city = truck.init_city;
+        for (size_t j = 0; j < scheduled_orders.size(); ++j) {
+            Order current = orders.GetOrder(scheduled_orders[j]);
+
+            auto dist_between_orders = dists.GetDistance(previous.to_city, current.from_city); 
+            if (!dist_between_orders.has_value()) {
+                std::cerr << "checker error truck(" << truck.truck_id << "): no road between " << previous.to_city << " and " << current.from_city << endl;
+                exit(1);
+            }
+
+            unsigned int arriving_time = previous.finish_time + dist_between_orders.value() * 60 / params.speed;
+            if (arriving_time > current.start_time) {
+                std::cerr << "checker error truck(" << truck.truck_id << "): arrived too late - time(" << arriving_time << "); order(" << current.order_id << ") starts at " << current.start_time << endl;
+                exit(1);
+            }
+
+            double revenue = 0.;
+            {
+                auto cost = data_.MoveBetweenOrders(previous, current);
+                assert(cost.has_value());
+                revenue += cost.value();
+            }
+            {
+                revenue += data_.GetRealOrderRevenue(scheduled_orders[j]);
+            }
+
+            #ifdef DEBUG_MODE
+            cout << std::fixed << std::setprecision(5) 
+                << "[got " << revenue 
+                << "]: arrive at city(" << current.from_city 
+                << " at time(" << arriving_time 
+                << ") wait till time(" << current.start_time 
+                << ") and move to city(" << current.to_city 
+                << ") by time(" << current.finish_time << ")" << endl;
+            #endif 
+
+            if (current.obligation) {
+                obligation_orders.insert(current.order_id);
+            }
+
+            summary_revenue += revenue;
+            previous = current;
+        }
+    }
+
+    int complete_obligation_orders_count = 0;
+    for(auto &order : orders) {
+        if(order.obligation) {
+            ++complete_obligation_orders_count;
+
+            auto it = obligation_orders.find(order.order_id);
+            if(it==obligation_orders.end()) {
+                std::cerr << "checker error: order(" << order.order_id << ") wasnt scheduled but its obligation one" << std::endl;
+            }
+        }
+    }
+
+    #ifdef DEBUG_MODE
+    cout << std::fixed << std::setprecision(5) 
+        << "total revenue: " << summary_revenue << endl
+        << "complete usual orders(" << complete_orders_count - complete_obligation_orders_count << ") " 
+        << "and obligation orders(" << complete_obligation_orders_count << ")" << endl
+        << "SOLUTION_DEBUG##" << endl;
+    #endif
+    return summary_revenue;
+}
