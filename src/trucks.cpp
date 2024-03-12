@@ -35,8 +35,8 @@ Truck::Truck(
     init_time(init_time),
     init_city(init_city) 
 {
-    mask_load_type = get_mask_load_type(str_load_type);
-    mask_trailer_type = get_mask_trailer_type(str_trailer_type);
+    mask_load_type = GetMaskLoadType(str_load_type);
+    mask_trailer_type = GetMaskTrailerType(str_trailer_type);
 }
 
 

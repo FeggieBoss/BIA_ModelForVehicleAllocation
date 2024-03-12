@@ -35,9 +35,14 @@ enum class TRAILER_TYPE {
     ISOTHERMAL    = (1<<4),
 };
 
-PARAM_NAME get_param_name(const std::string &str_param_name);
-int get_mask_load_type(const std::string &str_load_type);
-int get_mask_trailer_type(const std::string &str_trailer_type);
+PARAM_NAME GetParamName(const std::string &str_param_name);
+int GetMaskLoadType(const std::string &str_load_type);
+int GetMaskTrailerType(const std::string &str_trailer_type);
+bool IsExecutableBy(
+    int truck_mask_load_type, 
+    int truck_mask_trailer_type, 
+    int order_mask_load_type, 
+    int order_mask_trailer_type);
 
 class XLSXcell {
 private:

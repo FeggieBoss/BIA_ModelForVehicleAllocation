@@ -11,7 +11,7 @@ void Distances::DebugPrint() {
             <<"from_city is "<<from<<endl
             <<"to_city is "<<to<<endl
             <<"distance is "<<d<<endl
-            <<"##";
+            <<"##"<<endl;
     }
     cout<<"DISTANCE_DEBUG##"<<endl<<endl;
 }

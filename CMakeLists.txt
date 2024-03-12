@@ -26,6 +26,7 @@ add_executable(main
     src/distances.cpp
     src/data.cpp
     src/checker.cpp
+    src/honest_solver.cpp
 )
 target_link_libraries(main highs::highs)
 target_link_libraries(main OpenXLSX::OpenXLSX)

@@ -1,8 +1,5 @@
 #include "model.h"
 
-using std::cout;
-using std::endl;
-
 static int n = 0;
 static int m_real = 0;
 static int m_fake = 0;

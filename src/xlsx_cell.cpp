@@ -1,6 +1,6 @@
 #include "xlsx_cell.h"
 
-PARAM_NAME get_param_name(const std::string &str_param_name) {
+PARAM_NAME GetParamName(const std::string &str_param_name) {
     if(str_param_name == "VELOCITY") {
         return PARAM_NAME::VELOCITY;
     } else if(str_param_name == "TRIP_KM_PRICE") {
@@ -21,7 +21,7 @@ PARAM_NAME get_param_name(const std::string &str_param_name) {
     return PARAM_NAME::VELOCITY;
 }
 
-int get_mask_load_type(const std::string &str_load_type) {
+int GetMaskLoadType(const std::string &str_load_type) {
     if(str_load_type == "Задняя") {
         return static_cast<int>(LOAD_TYPE::REAR);
     } else if(str_load_type == "Полная") {
@@ -38,7 +38,7 @@ int get_mask_load_type(const std::string &str_load_type) {
     return static_cast<int>(LOAD_TYPE::REAR);
 }
 
-int get_mask_trailer_type(const std::string &str_trailer_type) {
+int GetMaskTrailerType(const std::string &str_trailer_type) {
     if(str_trailer_type == "Тент") {
         return static_cast<int>(TRAILER_TYPE::AWNING);
     } else if(str_trailer_type == "Фургон") {
@@ -57,6 +57,16 @@ int get_mask_trailer_type(const std::string &str_trailer_type) {
     return static_cast<int>(TRAILER_TYPE::AWNING);
 }
 
+bool IsExecutableBy(
+    int truck_mask_load_type, 
+    int truck_mask_trailer_type, 
+    int order_mask_load_type, 
+    int order_mask_trailer_type) 
+{
+    bool good_load_type = (truck_mask_load_type & order_mask_load_type) == truck_mask_load_type;    
+    bool good_trailer_type = (truck_mask_trailer_type & order_mask_trailer_type) == truck_mask_trailer_type;
+    return good_load_type & good_trailer_type;
+}
 
 
 XLSXcell::XLSXcell(XLRowDataIterator cell): cell(cell) {}

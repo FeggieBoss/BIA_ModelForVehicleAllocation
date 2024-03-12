@@ -38,7 +38,7 @@ Params::Params(const std::string &path_to_xlsx) {
         std::string str_param_name = cell.get_value<std::string>(); // reading name
         cell.next(); // moving to value
         
-        switch (get_param_name(str_param_name)) { // reading value
+        switch (GetParamName(str_param_name)) { // reading value
             case PARAM_NAME::VELOCITY: {
                 speed = cell.get_num_value<double>().value();
             }

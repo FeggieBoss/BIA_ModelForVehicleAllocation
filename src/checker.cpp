@@ -79,7 +79,7 @@ std::optional<double> Checker::Check() {
             cout << std::fixed << std::setprecision(5) 
                 << "[got " << revenue 
                 << "]: arrive at city(" << current.from_city 
-                << " at time(" << arriving_time 
+                << ") at time(" << arriving_time 
                 << ") wait till time(" << current.start_time 
                 << ") and move to city(" << current.to_city 
                 << ") by time(" << current.finish_time << ")" << endl;
