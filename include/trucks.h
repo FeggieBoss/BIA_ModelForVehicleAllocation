@@ -45,8 +45,8 @@ public:
         return trucks.end();
     }
 
-    Truck GetTruck(size_t ind);
-    size_t Size();
+    Truck GetTruck(size_t ind) const;
+    size_t Size() const;
 
     #ifdef DEBUG_MODE
     void DebugPrint();

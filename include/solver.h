@@ -5,6 +5,9 @@
 #include "solution.h"
 #include "data.h"
 
+// {truck, from_order, to_order}
+typedef std::tuple<size_t, size_t, size_t> variable_t;
+
 class Solver {
 public:
     Solver() = default;

@@ -57,6 +57,25 @@ int GetMaskTrailerType(const std::string &str_trailer_type) {
     return static_cast<int>(TRAILER_TYPE::AWNING);
 }
 
+int GetFullMaskLoadType() {
+    return (
+        static_cast<int>(LOAD_TYPE::REAR) |
+        static_cast<int>(LOAD_TYPE::SIDE) |
+        static_cast<int>(LOAD_TYPE::TOP)  | 
+        static_cast<int>(LOAD_TYPE::FULL)
+    );
+}
+
+int GetFullMaskTrailerType() {
+    return (
+        static_cast<int>(TRAILER_TYPE::AWNING)        |
+        static_cast<int>(TRAILER_TYPE::VAN)           |
+        static_cast<int>(TRAILER_TYPE::REFRIDGERATOR) | 
+        static_cast<int>(TRAILER_TYPE::THERMOS)       |
+        static_cast<int>(TRAILER_TYPE::ISOTHERMAL)
+    );
+}
+
 bool IsExecutableBy(
     int truck_mask_load_type, 
     int truck_mask_trailer_type, 

@@ -35,6 +35,18 @@ public:
         double distance,
         double revenue
     );
+    Order(
+        unsigned int order_id,
+        bool obligation,
+        unsigned int start_time,
+        unsigned int finish_time,
+        unsigned int from_city,
+        unsigned int to_city,
+        int mask_load_type, 
+        int mask_trailer_type,
+        double distance,
+        double revenue
+    );
     
     #ifdef DEBUG_MODE
     void DebugPrint();
@@ -56,8 +68,9 @@ public:
         return orders.end();
     }
 
-    Order GetOrder(size_t ind);
-    size_t Size();
+    Order GetOrder(size_t ind) const;
+    void AddOrder(const Order& order);
+    size_t Size() const;
 
     #ifdef DEBUG_MODE
     void DebugPrint();

@@ -38,6 +38,8 @@ enum class TRAILER_TYPE {
 PARAM_NAME GetParamName(const std::string &str_param_name);
 int GetMaskLoadType(const std::string &str_load_type);
 int GetMaskTrailerType(const std::string &str_trailer_type);
+int GetFullMaskLoadType();
+int GetFullMaskTrailerType();
 bool IsExecutableBy(
     int truck_mask_load_type, 
     int truck_mask_trailer_type, 

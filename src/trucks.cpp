@@ -84,7 +84,7 @@ Trucks::Trucks(const std::string &path_to_xlsx) {
     }
 }
 
-Truck Trucks::GetTruck(size_t ind) {
+Truck Trucks::GetTruck(size_t ind) const {
     if (ind >= trucks.size()) {
         std::cerr << "GetTruck(" << ind << "): out of bounds id > size(" << trucks.size() << ")" << std::endl;
         exit(1);
@@ -92,6 +92,6 @@ Truck Trucks::GetTruck(size_t ind) {
     return trucks[ind];
 }
 
-size_t Trucks::Size() {
+size_t Trucks::Size() const {
     return trucks.size();
 }

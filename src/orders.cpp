@@ -25,11 +25,35 @@ void Order::DebugPrint() {
 using std::cout;
 using std::endl;
 void Orders::DebugPrint() {
+    int it = 0;
     for(auto &order : orders) {
+        cout << "№" << it++ << " ";
         order.DebugPrint();
     }
 }
 #endif
+
+Order::Order(
+    unsigned int order_id,
+    bool obligation,
+    unsigned int start_time,
+    unsigned int finish_time,
+    unsigned int from_city,
+    unsigned int to_city,
+    int mask_load_type, 
+    int mask_trailer_type,
+    double distance,
+    double revenue
+) : order_id(order_id),
+    obligation(obligation),
+    start_time(start_time),
+    finish_time(finish_time),
+    from_city(from_city),
+    to_city(to_city),
+    mask_load_type(mask_load_type),
+    mask_trailer_type(mask_trailer_type),
+    distance(distance),
+    revenue(revenue) {}
 
 Order::Order(
     unsigned int order_id,
@@ -120,7 +144,7 @@ Orders::Orders(const std::string &path_to_xlsx) {
     }
 }
 
-Order Orders::GetOrder(size_t ind) {
+Order Orders::GetOrder(size_t ind) const {
     if (ind >= orders.size()) {
         std::cerr << "GetOrder(" << ind << "): out of bounds id > size(" << orders.size() << ")" << std::endl;
         exit(1);
@@ -128,6 +152,10 @@ Order Orders::GetOrder(size_t ind) {
     return orders[ind];
 }
 
-size_t Orders::Size() {
+void Orders::AddOrder(const Order& order) {
+    orders.push_back(order);
+}
+
+size_t Orders::Size() const {
     return orders.size();
 }

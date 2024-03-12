@@ -27,6 +27,7 @@ add_executable(main
     src/data.cpp
     src/checker.cpp
     src/honest_solver.cpp
+    src/weighted_cities_solver.cpp
 )
 target_link_libraries(main highs::highs)
 target_link_libraries(main OpenXLSX::OpenXLSX)

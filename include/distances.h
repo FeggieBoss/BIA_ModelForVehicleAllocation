@@ -11,9 +11,9 @@
 #include <optional>
 
 class Distances {
-private:
-    std::map<std::pair<unsigned int,unsigned int>, double> dists; 
 public:
+    std::map<std::pair<unsigned int,unsigned int>, double> dists; 
+
     Distances(){};
     Distances(const std::string &path_to_xlsx);
 
