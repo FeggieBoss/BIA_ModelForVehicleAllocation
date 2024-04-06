@@ -25,8 +25,9 @@ public:
     );
 
     void ShiftTimestamps();
-    std::optional<double> MoveBetweenOrders(const Order& previous, const Order& current);
-    double GetRealOrderRevenue(size_t ind);
+    std::optional<double> MoveBetweenOrders(const Order& previous, const Order& current) const;
+    double GetRealOrderRevenue(size_t ind) const;
+    double GetFreeMovementOrderRevenue(size_t ind) const;
 };
 
 

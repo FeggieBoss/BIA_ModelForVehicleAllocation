@@ -53,18 +53,16 @@ namespace std{
 
 WeightedCitiesSolver::WeightedCitiesSolver() {}
 
-void WeightedCitiesSolver::SetData(const Data& data) {
-    data_ = data;
-
+void WeightedCitiesSolver::ModifyData(Data& data) {
     // its not all cities as name claims :)
-    // its rather cities we can move somewhere from which exactly what we need
+    // its rather cities we can move somewhere from (which exactly what we need)
     std::set<unsigned int> all_cities;
-    for (auto& [key, d] : data_.dists.dists) {
+    for (auto& [key, d] : data.dists.dists) {
         auto& [from, _] = key;
         all_cities.emplace(from);
     }
 
-    for (auto &order : data_.orders) {
+    for (auto &order : data.orders) {
         // city we are in after completing order / city we start our free move from
         unsigned int from_city = order.to_city;
         unsigned int start_time = order.finish_time;
@@ -72,22 +70,38 @@ void WeightedCitiesSolver::SetData(const Data& data) {
         for(unsigned int to_city : all_cities) {
             if (from_city == to_city) continue;
 
-            auto distance = data_.dists.GetDistance(from_city, to_city);
+            auto distance = data.dists.GetDistance(from_city, to_city);
             if (!distance.has_value()) {
                 // there is no road between this two cities
                 continue;
             }
             double d = distance.value();
             
-            unsigned int finish_time = start_time + (d * 60 / data_.params.speed);
+            unsigned int finish_time = start_time + (d * 60 / data.params.speed);
 
-            if (free_move_time_boundary_.has_value()) {
-                unsigned int time_bound = free_move_time_boundary_.value();
+            if (time_boundary_.has_value()) {
+                unsigned int time_bound = time_boundary_.value();
                 if (finish_time > time_bound) {
                     // we cant move to such city before we running out of time
                     continue;
                 }
             }
+
+            /*
+                later in solver we will treat such orders as real ones 
+                why? - checker or other components of pipeline ideally shouldnt know anythin except main rules of task 
+                (because we dont wanna change their code at all after adding new solvers with new ModifyData's)
+                
+                So we will calculate real order revenue by subtracting duty_time_cost, duty_km_cost
+                but in reality we suppose to use free_time_cost, free_km_cost thus we need to compensate such error
+            */
+            double revenue = 0.f;
+            // compensating error
+            revenue += d * data.params.duty_km_cost;
+            revenue += (finish_time - start_time) * data.params.duty_hour_cost;
+            // subtracting real cost
+            revenue -= d * data.params.free_km_cost;
+            revenue -= (finish_time - start_time) * data.params.free_hour_cost;
 
             Order new_order = {
                 0,                          // order_id
@@ -99,34 +113,35 @@ void WeightedCitiesSolver::SetData(const Data& data) {
                 GetFullMaskLoadType(),      // mask_load_type
                 GetFullMaskTrailerType(),   // mask_trailer_type
                 d,                          // distance
-                0.                          // revenue
+                revenue                     // revenue
             };
             
-            data_.orders.AddOrder(new_order);
+            data.orders.AddOrder(new_order);
         }
     }
 
     #ifdef DEBUG_MODE
     cout << "ADDED FREE-MOVEMENT-ORDERS:"<<endl;
-    data_.orders.DebugPrint();
+    data.orders.DebugPrint();
     #endif
 }
 
+void WeightedCitiesSolver::SetData(const Data& data) {
+    data_ = data;
+}
+
 void WeightedCitiesSolver::SetData(const Data& data, unsigned int t) {
-    free_move_time_boundary_ = {t};
+    time_boundary_ = {t};
     SetData(data);
+}
+
+Data WeightedCitiesSolver::GetData() {
+    return data_;
 }
 
 void WeightedCitiesSolver::SetVectorW(const weights_vector_t& w) {
     w_ = w;
 }
-
-
-
-// static size_t Get1dVariable(size_t i, size_t j, size_t k, size_t orders_count) {
-//     auto m = orders_count;
-//     return k+(j+i*m)*m;
-// } 
 
 static variable_t Get3dVariable(size_t x, size_t orders_count) {
     auto m = orders_count;
@@ -328,7 +343,7 @@ HighsModel WeightedCitiesSolver::CreateModel() {
         }
     }
 
-    // lets also let any truck to just pick only fake order <=> just not doing any real order
+    // lets also let any truck to just pick only fake orders <=> simply not doing any real orders
     for(size_t i = 0; i < trucks_count; ++i) {
         size_t ind = model.lp_.col_lower_.size();
         to_index[{i,fake_first_order,fake_last_order}] = ind;
@@ -382,7 +397,7 @@ HighsModel WeightedCitiesSolver::CreateModel() {
         double c = 0.;
 
         if (j != fake_first_order) {
-            // real revenue from completing j-th order (revenue - time_cost - km_cost)
+            // real revenue from completing j-th order (revenue - duty_time_cost - duty_km_cost)
             c += data_.GetRealOrderRevenue(j);
         }
 
@@ -395,6 +410,18 @@ HighsModel WeightedCitiesSolver::CreateModel() {
         if (k == fake_last_order) {
             // taking in account weight of last city in scheduling scheme of this truck
             c += w_[from_order.to_city];
+
+            // also lets add fine for waiting until time_boudary
+            if (time_boundary_.has_value()) {
+                unsigned int time_boundary = time_boundary_.value();
+                /*
+                    there is possibility that we will finish our order after time_boundary
+                    Note: we only expected order.start_time <= time_boundary
+                */
+                if (time_boundary > from_order.finish_time) {
+                    c -= (time_boundary - from_order.finish_time) * params.wait_cost;
+                }
+            }
         }
 
         model.lp_.col_cost_[ind] = c;
@@ -708,16 +735,23 @@ solution_t WeightedCitiesSolver::Solve() {
 
             if (j < orders_count) {
                 auto jth = data_.orders.GetOrder(j);
-                printf("\n\t  /// from_order_id(%2d)[from_city(%2d),to_city(%2d)]", jth.order_id, jth.from_city, jth.to_city);
+                printf("\n\t   /// from_order_id(%2d)[from_city(%2d),to_city(%2d)]", jth.order_id, jth.from_city, jth.to_city);
+            } else {
+                std::string name = (j == orders_count ? "ffo" : "flo");
+                printf("\n\t   /// %s", name.c_str());
             }
             if (k < orders_count) {
                 auto kth = data_.orders.GetOrder(k);
-                printf("\n\t  /// to_order_id(%2d)[from_city(%2d),to_city(%2d)]", kth.order_id, kth.from_city, kth.to_city);
+                printf("\n\t   /// to_order_id(%2d)[from_city(%2d),to_city(%2d)]", kth.order_id, kth.from_city, kth.to_city);
+            } else {
+                std::string name = (k == orders_count ? "ffo" : "flo");
+                printf("\n\t   /// %s", name.c_str());
             }
             printf("\n");
             #endif
 
-            if (0 < j && j < orders_count)
+            // not adding fake orders in solution
+            if (j < orders_count)
                 solution_arr[i].push_back(j);
         }
     }

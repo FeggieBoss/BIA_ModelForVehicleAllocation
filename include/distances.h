@@ -17,7 +17,7 @@ public:
     Distances(){};
     Distances(const std::string &path_to_xlsx);
 
-    std::optional<double> GetDistance(unsigned int from, unsigned int to);
+    std::optional<double> GetDistance(unsigned int from, unsigned int to) const;
 
     #ifdef DEBUG_MODE
     void DebugPrint();

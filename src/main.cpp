@@ -26,18 +26,28 @@ int main() {
     //         {2}
     //     }
     // };
-    // 6 cities               1   2   3   4   5   6  
-    weights_vector_t w = {0., 100., 0., 0., 9., 9., 9.};
+
+    // weights for 6 cities
+    weights_vector_t w = {
+        0., 
+        0., // 1
+        0., // 2
+        0., // 3
+        0., // 4
+        0., // 5
+        0.  // 6
+    };
 
     // HonestSolver solver;
     // solver.SetData(data);
     // solution_t solution = solver.Solve();
 
     WeightedCitiesSolver solver;
-    solver.SetData(data);
+    // asking WSolver to add free movement edges
+    solver.ModifyData(data);
+    solver.SetData(data, 150);
     solver.SetVectorW(w);
     solution_t solution = solver.Solve();
-
 
     Checker checker(data);
     checker.SetSolution(solution);

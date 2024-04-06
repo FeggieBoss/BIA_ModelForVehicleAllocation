@@ -29,7 +29,7 @@ void Data::ShiftTimestamps() {
 }
 
 
-std::optional<double> Data::MoveBetweenOrders(const Order& previous, const Order& current) {
+std::optional<double> Data::MoveBetweenOrders(const Order& previous, const Order& current) const {
     double cost = 0.;
 
     auto dist_between_orders = dists.GetDistance(previous.to_city, current.from_city); 
@@ -48,13 +48,23 @@ std::optional<double> Data::MoveBetweenOrders(const Order& previous, const Order
     return cost;
 }
 
-
-double Data::GetRealOrderRevenue(size_t ind) {
+double Data::GetRealOrderRevenue(size_t ind) const {
     Order order = orders.GetOrder(ind);
     double cost = 0.;
 
     cost -= (order.finish_time - order.start_time) * params.duty_km_cost; // cost of time  
     cost -= order.distance * params.duty_km_cost;                         // cost of km
     cost += order.revenue;                                                // revenue
+    return cost;
+}
+
+double Data::GetFreeMovementOrderRevenue(size_t ind) const {
+    Order order = orders.GetOrder(ind);
+    assert(order.order_id == 0);
+    double cost = 0.;
+
+    cost -= (order.finish_time - order.start_time) * params.free_hour_cost; // cost of time  
+    cost -= order.distance * params.free_km_cost;                           // cost of km
+    assert(order.revenue == 0.);                                            // free movement orders dont have revenue
     return cost;
 }

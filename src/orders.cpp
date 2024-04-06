@@ -128,6 +128,8 @@ Orders::Orders(const std::string &path_to_xlsx) {
         cell.next();
 
         if(order_id && start_time && finish_time && from_city && to_city && distance && revenue) {
+            assert(order_id > 0);
+
             orders.push_back(Order{
                 order_id.value(),
                 obligation,

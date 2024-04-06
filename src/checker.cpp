@@ -24,12 +24,19 @@ std::optional<double> Checker::Check() {
     auto& dists = data_.dists;
 
 
+    // each truck has its own set of cheduled orders (might be empty set)
     assert(trucks.Size() == orders_by_truck.size());
 
     int complete_orders_count = 0;
     double summary_revenue = 0;
     for(size_t i=0;i<orders_by_truck.size();++i) {
         auto &scheduled_orders = orders_by_truck[i];
+
+        // organizing scheduled orders in the order they will be completed
+        sort(scheduled_orders.begin(), scheduled_orders.end(), [&orders](const int& a, const int& b) {
+            return orders.GetOrder(a).start_time < orders.GetOrder(b).start_time;
+        });
+
         complete_orders_count += scheduled_orders.size();
 
         Truck truck = trucks.GetTruck(i);

@@ -52,7 +52,7 @@ Distances::Distances(const std::string &path_to_xlsx) {
     }
 }
 
-std::optional<double> Distances::GetDistance(unsigned int from, unsigned int to) {
+std::optional<double> Distances::GetDistance(unsigned int from, unsigned int to) const {
     if (from == to) {
         return 0.;
     }
