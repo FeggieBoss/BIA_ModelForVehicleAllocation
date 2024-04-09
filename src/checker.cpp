@@ -17,7 +17,7 @@ std::optional<double> Checker::Check() {
     #endif
 
     std::set<int> obligation_orders;
-    auto& orders_by_truck = solution_.orders_by_truck;
+    auto& orders_by_truck_pos = solution_.orders_by_truck_pos;
     auto& params = data_.params;
     auto& trucks = data_.trucks;
     auto& orders = data_.orders;
@@ -25,26 +25,27 @@ std::optional<double> Checker::Check() {
 
 
     // each truck has its own set of cheduled orders (might be empty set)
-    assert(trucks.Size() == orders_by_truck.size());
+    assert(trucks.Size() == orders_by_truck_pos.size());
+    size_t trucks_count = trucks.Size();
 
     int complete_orders_count = 0;
     double summary_revenue = 0;
-    for(size_t i=0;i<orders_by_truck.size();++i) {
-        auto &scheduled_orders = orders_by_truck[i];
+    for(size_t truck_pos = 0; truck_pos < trucks_count; ++truck_pos) {
+        auto &scheduled_orders = orders_by_truck_pos[truck_pos];
 
         // organizing scheduled orders in the order they will be completed
         sort(scheduled_orders.begin(), scheduled_orders.end(), [&orders](const int& a, const int& b) {
-            return orders.GetOrder(a).start_time < orders.GetOrder(b).start_time;
+            return orders.GetOrderConst(a).start_time < orders.GetOrderConst(b).start_time;
         });
 
         complete_orders_count += scheduled_orders.size();
 
-        Truck truck = trucks.GetTruck(i);
+        const Truck& truck = trucks.GetTruckConst(truck_pos);
 
         #ifdef DEBUG_MODE
         cout << "truck(" << truck.truck_id << "): {";
         for (size_t j = 0; j < scheduled_orders.size(); ++j) {
-            cout << orders.GetOrder(scheduled_orders[j]).order_id;
+            cout << orders.GetOrderConst(scheduled_orders[j]).order_id;
             if (j + 1 != scheduled_orders.size()) {
                 cout << ", ";
             }
@@ -57,8 +58,8 @@ std::optional<double> Checker::Check() {
         Order previous;
         previous.finish_time = truck.init_time;
         previous.to_city = truck.init_city;
-        for (size_t j = 0; j < scheduled_orders.size(); ++j) {
-            Order current = orders.GetOrder(scheduled_orders[j]);
+        for (size_t order_pos = 0; order_pos < scheduled_orders.size(); ++order_pos) {
+            const Order& current = orders.GetOrderConst(scheduled_orders[order_pos]);
 
             auto dist_between_orders = dists.GetDistance(previous.to_city, current.from_city); 
             if (!dist_between_orders.has_value()) {
@@ -79,7 +80,7 @@ std::optional<double> Checker::Check() {
                 revenue += cost.value();
             }
             {
-                revenue += data_.GetRealOrderRevenue(scheduled_orders[j]);
+                revenue += data_.GetRealOrderRevenue(scheduled_orders[order_pos]);
             }
 
             #ifdef DEBUG_MODE

@@ -3,6 +3,7 @@
 #include "checker.h"
 #include "honest_solver.h"
 #include "weighted_cities_solver.h"
+#include "batch_solver.h"
 
 #include <cassert>
 
@@ -13,7 +14,9 @@ int main() {
     std::string dists_path = "./../case_1/distances_small.xlsx";
     
     Data data(params_path, trucks_path, orders_path, dists_path);
+
     data.ShiftTimestamps();
+    data.SqueezeCitiesIds();
 
     // data.params.DebugPrint();
     // data.trucks.DebugPrint();
@@ -27,27 +30,21 @@ int main() {
     //     }
     // };
 
-    // weights for 6 cities
-    weights_vector_t w = {
-        0., 
-        0., // 1
-        0., // 2
-        0., // 3
-        0., // 4
-        0., // 5
-        0.  // 6
-    };
-
     // HonestSolver solver;
     // solver.SetData(data);
     // solution_t solution = solver.Solve();
 
-    WeightedCitiesSolver solver;
-    // asking WSolver to add free movement edges
-    solver.ModifyData(data);
-    solver.SetData(data, 150);
-    solver.SetVectorW(w);
-    solution_t solution = solver.Solve();
+    // WeightedCitiesSolver solver;
+    // // asking WSolver to add free movement edges
+    // solver.ModifyData(data);
+    // solver.SetData(data); // (data, 150)
+    // solver.SetVectorW(w);
+    // solution_t solution = solver.Solve();
+
+
+    BatchSolver solver;
+    solution_t solution = solver.Solve(data, 50);
+
 
     Checker checker(data);
     checker.SetSolution(solution);

@@ -1,60 +1,11 @@
 #include "honest_solver.h"
 
 // #define NO_LONG_EDGES
-namespace std{
-    namespace
-    {
-        // Code from boost
-        // Reciprocal of the golden ratio helps spread entropy
-        //     and handles duplicates.
-        // See Mike Seymour in magic-numbers-in-boosthash-combine:
-        //     https://stackoverflow.com/questions/4948780
-
-        template <class T>
-        inline void hash_combine(std::size_t& seed, T const& v)
-        {
-            seed ^= hash<T>()(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
-        }
-
-        // Recursive template code derived from Matthieu M.
-        template <class Tuple, size_t Index = std::tuple_size<Tuple>::value - 1>
-        struct HashValueImpl
-        {
-          static void apply(size_t& seed, Tuple const& tuple)
-          {
-            HashValueImpl<Tuple, Index-1>::apply(seed, tuple);
-            hash_combine(seed, get<Index>(tuple));
-          }
-        };
-
-        template <class Tuple>
-        struct HashValueImpl<Tuple,0>
-        {
-          static void apply(size_t& seed, Tuple const& tuple)
-          {
-            hash_combine(seed, get<0>(tuple));
-          }
-        };
-    }
-
-    template <typename ... TT>
-    struct hash<std::tuple<TT...>> 
-    {
-        size_t
-        operator()(std::tuple<TT...> const& tt) const
-        {                                              
-            size_t seed = 0;                             
-            HashValueImpl<std::tuple<TT...> >::apply(seed, tt);    
-            return seed;                                 
-        }                                              
-
-    };
-}
 
 HonestSolver::HonestSolver() {}
 
 void HonestSolver::SetData(const Data& data) {
-    data_ = data;
+    Solver::Solver::data_ = data;
 }
 
 // static size_t Get1dVariable(size_t i, size_t j, size_t k, size_t orders_count) {
@@ -71,10 +22,10 @@ static variable_t Get3dVariable(size_t x, size_t orders_count) {
 }
 
 HighsModel HonestSolver::CreateModel() {
-    Params params = data_.params;
-    Trucks trucks = data_.trucks;
-    Orders orders = data_.orders;    
-    Distances dists = data_.dists;
+    Params params = Solver::data_.params;
+    Trucks trucks = Solver::data_.trucks;
+    Orders orders = Solver::data_.orders;    
+    Distances dists = Solver::data_.dists;
 
     size_t trucks_count = trucks.Size();
     size_t orders_count = orders.Size();    
@@ -110,7 +61,7 @@ HighsModel HonestSolver::CreateModel() {
         Truck truck = trucks.GetTruck(i);
 
         for(size_t j = 0; j < orders_count; ++j) {
-            Order from_order = orders.GetOrder(j);
+            const Order& from_order = orders.GetOrderConst(j);
 
             if (!IsExecutableBy(
                 truck.mask_load_type, 
@@ -122,7 +73,7 @@ HighsModel HonestSolver::CreateModel() {
             }
 
             for(size_t k = 0; k < orders_count; ++k) {
-                Order to_order = orders.GetOrder(k);
+                const Order& to_order = orders.GetOrderConst(k);
                 
                 int l = 0;
                 int u = 1; 
@@ -136,7 +87,7 @@ HighsModel HonestSolver::CreateModel() {
                 ) { // bad trailer or load type
                     u = 0; 
                 } else {
-                    auto cost = data_.MoveBetweenOrders(from_order, to_order);
+                    auto cost = Solver::data_.MoveBetweenOrders(from_order, to_order);
                     u &= cost.has_value(); // possible to arrive to k-th after j-th
 
                     // its not necessary for correctness to check if j-th order can be picked by i-th truck (it will be checked later anyway)
@@ -157,7 +108,7 @@ HighsModel HonestSolver::CreateModel() {
                 if (u != 0) {
                     size_t ind = model.lp_.col_lower_.size();
                     to_index[{i,j,k}] = ind;
-                    to_3d_variables_[ind] = {i,j,k};
+                    Solver::to_3d_variables_[ind] = {i,j,k};
 
                     model.lp_.col_lower_.push_back(l);
                     model.lp_.col_upper_.push_back(u);
@@ -184,13 +135,13 @@ HighsModel HonestSolver::CreateModel() {
     };
     
     for(size_t i = 0; i < trucks_count; ++i) {
-        Truck truck = trucks.GetTruck(i);
+        const Truck& truck = trucks.GetTruckConst(i);
 
         // our fake first order (state after completing it <=> initial state of truck)
         Order from_order = make_ffo(truck);
 
         for(size_t k = 0; k < orders_count; ++k) {
-            Order to_order = orders.GetOrder(k);
+            const Order& to_order = orders.GetOrderConst(k);
                 
             int l = 0;
             int u = 1; 
@@ -205,14 +156,14 @@ HighsModel HonestSolver::CreateModel() {
             ) { // bad trailer or load type
                 u = 0; 
             } else {
-                auto cost = data_.MoveBetweenOrders(from_order, to_order);
+                auto cost = Solver::data_.MoveBetweenOrders(from_order, to_order);
                 u &= cost.has_value(); // possible to complete j-th order as first one
             }
 
             if (u != 0) {
                 size_t ind = model.lp_.col_lower_.size();
                 to_index[{i,fake_first_order,k}] = ind;
-                to_3d_variables_[ind] = {i,fake_first_order,k};
+                Solver::to_3d_variables_[ind] = {i,fake_first_order,k};
                 model.lp_.col_lower_.push_back(l);
                 model.lp_.col_upper_.push_back(u);
             }
@@ -222,10 +173,10 @@ HighsModel HonestSolver::CreateModel() {
     // fake last order for each truck
     size_t fake_last_order = orders_count + 1;
     for(size_t i = 0; i < trucks_count; ++i) {
-        Truck truck = trucks.GetTruck(i);
+        const Truck& truck = trucks.GetTruckConst(i);
 
         for(size_t j = 0; j < orders_count; ++j) {
-            Order from_order = orders.GetOrder(j);
+            const Order& from_order = orders.GetOrderConst(j);
 
             // our fake last order (we suppose to make it pickable after any order)
             // we can set such configuration
@@ -255,41 +206,41 @@ HighsModel HonestSolver::CreateModel() {
             if (u != 0) {
                 size_t ind = model.lp_.col_lower_.size();
                 to_index[{i,j,fake_last_order}] = ind;
-                to_3d_variables_[ind] = {i,j,fake_last_order};
+                Solver::to_3d_variables_[ind] = {i,j,fake_last_order};
                 model.lp_.col_lower_.push_back(l);
                 model.lp_.col_upper_.push_back(u);
             }
         }
     }
 
-    // lets also let any truck to just pick only fake order <=> just not doing any real order
+    // lets also let any truck to just pick only fake orders <=> simply not doing any real orders
     for(size_t i = 0; i < trucks_count; ++i) {
         size_t ind = model.lp_.col_lower_.size();
         to_index[{i,fake_first_order,fake_last_order}] = ind;
-        to_3d_variables_[ind] = {i,fake_first_order,fake_last_order};
+        Solver::to_3d_variables_[ind] = {i,fake_first_order,fake_last_order};
         model.lp_.col_lower_.push_back(0);
         model.lp_.col_upper_.push_back(1);
     }
 
     #ifdef DEBUG_MODE
     cout << "##VARIABLES_DEBUG" << endl;
-    for (auto &el : to_3d_variables_) {
+    for (auto &el : Solver::to_3d_variables_) {
         auto& [i,j,k] = el.second;
         std::string j_th_id = (j < orders_count 
-            ? std::to_string(orders.GetOrder(j).order_id) 
+            ? std::to_string(orders.GetOrderConst(j).order_id) 
             : 
             (j == fake_first_order 
                 ? "ffo"
                 : "flo"));
         
         std::string k_th_id = (k < orders_count 
-            ? std::to_string(orders.GetOrder(k).order_id) 
+            ? std::to_string(orders.GetOrderConst(k).order_id) 
             : 
             (k == fake_first_order 
                 ? "ffo"
                 : "flo"));        
         
-        printf("[%2lu] {%2ld,%2ld,%2ld} for truck_id(%2d) edge (%4s, %4s)\n", el.first, i, j, k, trucks.GetTruck(i).truck_id, j_th_id.c_str(), k_th_id.c_str());
+        printf("[%2lu] {%2ld,%2ld,%2ld} for truck_id(%2d) edge (%4s, %4s)\n", el.first, i, j, k, trucks.GetTruckConst(i).truck_id, j_th_id.c_str(), k_th_id.c_str());
     }
     cout << "VARIABLES_DEBUG##" << endl;
     #endif
@@ -298,40 +249,40 @@ HighsModel HonestSolver::CreateModel() {
     cout << "[flag]no long edges: " << no_long_edges << " (out of " << n*m*m << ")" << endl;
     #endif
     #ifdef DEBUG_MODE
-    cout << "non zero variables: " << to_3d_variables_.size() << " (out of " << trucks_count*(orders_count+1)*(orders_count+1) << ")" << endl;
-    cout << "variables: " << to_3d_variables_.size() << endl;
+    cout << "non zero variables: " << Solver::to_3d_variables_.size() << " (out of " << trucks_count*(orders_count+1)*(orders_count+1) << ")" << endl;
+    cout << "variables: " << Solver::to_3d_variables_.size() << endl;
     #endif
 
     // setting number of rows in l,u,x (number of variables)
-    model.lp_.num_col_ = to_3d_variables_.size();
+    model.lp_.num_col_ = Solver::to_3d_variables_.size();
 
     // processing c
     // model.lp_.col_cost_
     model.lp_.col_cost_.resize(model.lp_.num_col_);
-    for (auto &el : to_3d_variables_) {
+    for (auto &el : Solver::to_3d_variables_) {
         size_t ind = el.first;
         auto& [i,j,k] = el.second;
-        Truck truck = trucks.GetTruck(i);
+        const Truck& truck = trucks.GetTruckConst(i);
         
         double c = 0.;
 
         if (j != fake_first_order) {
-            // real revenue from completing j-th order (revenue - time_cost - km_cost)
-            c += data_.GetRealOrderRevenue(j);
+            // real revenue from completing j-th order (revenue - duty_time_cost - duty_km_cost)
+            c += Solver::data_.GetRealOrderRevenue(j);
         }
 
-        Order from_order = (j != fake_first_order ? orders.GetOrder(j) : make_ffo(truck));
-        Order to_order   = (k != fake_last_order  ? orders.GetOrder(k) : make_flo(from_order));
+        const Order& from_order = (j != fake_first_order ? orders.GetOrderConst(j) : make_ffo(truck));
+        const Order& to_order   = (k != fake_last_order  ? orders.GetOrderConst(k) : make_flo(from_order));
 
         // cost of moving to to_order.from_city and waiting until we can start it
-        c += data_.MoveBetweenOrders(from_order, to_order).value();
+        c += Solver::data_.MoveBetweenOrders(from_order, to_order).value();
 
         model.lp_.col_cost_[ind] = c;
     }
     #ifdef DEBUG_MODE
     cout << "##COST_VECTOR_DEBUG" << endl; 
     for (size_t ind = 0; ind < model.lp_.col_cost_.size(); ++ind) {
-        auto& [i,j,k] = to_3d_variables_[ind];
+        auto& [i,j,k] = Solver::to_3d_variables_[ind];
         double c = model.lp_.col_cost_[ind];
 
         printf("C[{%2ld, %2ld, %2ld}] = %5f\n", i, j, k, c);
@@ -348,23 +299,23 @@ HighsModel HonestSolver::CreateModel() {
 
     #ifdef DEBUG_MODE
     auto A_matrix_element_debug = [this, &orders, &trucks, &number_of_rows, fake_first_order, fake_last_order, orders_count] (std::pair<size_t, int> &ind_val) {
-        auto& [i,j,k] = to_3d_variables_[ind_val.first];
+        auto& [i,j,k] = Solver::to_3d_variables_[ind_val.first];
         std::string j_th_id = (j < orders_count 
-            ? std::to_string(orders.GetOrder(j).order_id) 
+            ? std::to_string(orders.GetOrderConst(j).order_id) 
             : 
             (j == fake_first_order 
                 ? "ffo"
                 : "flo"));
         
         std::string k_th_id = (k < orders_count 
-            ? std::to_string(orders.GetOrder(k).order_id) 
+            ? std::to_string(orders.GetOrderConst(k).order_id) 
             : 
             (k == fake_first_order 
                 ? "ffo"
                 : "flo"));        
         
         printf("A[%2d][{%2ld,%2ld,%2ld}] = %2d / truck_id(%2d) and edge(%4s, %4s)\n", 
-            number_of_rows, i, j, k, ind_val.second, trucks.GetTruck(i).truck_id, j_th_id.c_str(), k_th_id.c_str());
+            number_of_rows, i, j, k, ind_val.second, trucks.GetTruckConst(i).truck_id, j_th_id.c_str(), k_th_id.c_str());
     };
     auto LU_debug = [&number_of_rows] (int L, int U) {
         printf("L[%2d] = %2d, R[%2d] = %2d\n", number_of_rows, L, number_of_rows, U);
@@ -442,11 +393,11 @@ HighsModel HonestSolver::CreateModel() {
                 }
             }
         }
-        bool obligation = orders.GetOrder(j).obligation;
+        bool obligation = orders.GetOrderConst(j).obligation;
         if (row_non_zeros.empty()) {
             if(obligation) {
                 std::cerr << "Error in scheduling obligation order_id("
-                    << orders.GetOrder(j).order_id << "): no trucks can execute "
+                    << orders.GetOrderConst(j).order_id << "): no trucks can execute "
                     << j << "-th order" << endl;
                 exit(1);
             }
@@ -575,72 +526,4 @@ HighsModel HonestSolver::CreateModel() {
     #endif
     
     return model;
-}
-
-solution_t HonestSolver::Solve() {
-    HighsModel model = CreateModel();
-    
-    Highs highs;
-    HighsStatus return_status;
-    
-    return_status = highs.passModel(model);
-    assert(return_status==HighsStatus::kOk);
-
-    const HighsLp& lp = highs.getLp(); 
-
-    return_status = highs.run();
-    assert(return_status==HighsStatus::kOk);
-    
-    const HighsModelStatus& model_status = highs.getModelStatus();
-    assert(model_status==HighsModelStatus::kOptimal);
-    
-    #ifdef DEBUG_MODE
-    const HighsInfo& info = highs.getInfo();
-    cout << "Model status: " << highs.modelStatusToString(model_status) << endl
-        << "Simplex iteration count: " << info.simplex_iteration_count << endl
-        << "Objective function value: " << info.objective_function_value << endl
-        << "Primal  solution status: " << highs.solutionStatusToString(info.primal_solution_status) << endl
-        << "Dual    solution status: " << highs.solutionStatusToString(info.dual_solution_status) << endl
-        << "Basis: " << highs.basisValidityToString(info.basis_validity) << endl;
-    #endif
-    const bool has_values = info.primal_solution_status;
-    const bool has_duals = info.dual_solution_status;
-    const bool has_basis = info.basis_validity;
-    
-    const HighsSolution& solution = highs.getSolution();
-    const HighsBasis& basis = highs.getBasis();
-    
-    model.lp_.integrality_.resize(lp.num_col_);
-    for (int col=0; col < lp.num_col_; col++)
-        model.lp_.integrality_[col] = HighsVarType::kInteger;
-
-    highs.passModel(model);
-    
-    return_status = highs.run();
-    assert(return_status==HighsStatus::kOk);
-    
-    #ifdef DEBUG_MODE
-    cout << "##SOLVER_DEBUG" << endl;
-    #endif
-
-    std::vector<std::vector<int>> solution_arr(data_.trucks.Size(), std::vector<int>());
-    size_t orders_count = data_.orders.Size();
-    for (int col = 0; col < lp.num_col_; ++col) {
-        if (info.primal_solution_status && solution.col_value[col]) {
-            auto& [i,j,k] = to_3d_variables_[col];
-
-            #ifdef DEBUG_MODE
-            printf("{%2ld,%2ld,%2ld}\n", i, j, k);
-            #endif
-
-            if (j < orders_count)
-                solution_arr[i].push_back(j);
-        }
-    }
-
-    #ifdef DEBUG_MODE
-    cout << "SOLVER_DEBUG##" << endl;
-    #endif
-
-    return {solution_arr};
 }

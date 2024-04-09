@@ -55,20 +55,23 @@ public:
 
 class Orders {
 private:
-    std::vector<Order> orders;
+    std::vector<Order> orders_;
 public:
     Orders(){};
     Orders(const std::string &path_to_xlsx);
+    Orders(const std::vector<Order>& orders);
+    Orders(const Orders& other);
 
     std::vector<Order>::iterator begin() {  // NOLINT
-        return orders.begin();
+        return orders_.begin();
     }
 
     std::vector<Order>::iterator end() {  // NOLINT
-        return orders.end();
+        return orders_.end();
     }
 
     Order GetOrder(size_t ind) const;
+    const Order& GetOrderConst(size_t ind) const;
     void AddOrder(const Order& order);
     size_t Size() const;
 

@@ -18,7 +18,6 @@ add_subdirectory(OpenXLSX)
 
 include_directories(include)
 add_executable(main 
-    src/main.cpp 
     src/xlsx_cell.cpp
     src/params.cpp
     src/trucks.cpp
@@ -26,8 +25,11 @@ add_executable(main
     src/distances.cpp
     src/data.cpp
     src/checker.cpp
+    src/solver.cpp
     src/honest_solver.cpp
     src/weighted_cities_solver.cpp
+    src/batch_solver.cpp
+    src/main.cpp 
 )
 target_link_libraries(main highs::highs)
 target_link_libraries(main OpenXLSX::OpenXLSX)

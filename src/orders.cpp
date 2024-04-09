@@ -26,7 +26,7 @@ using std::cout;
 using std::endl;
 void Orders::DebugPrint() {
     int it = 0;
-    for(auto &order : orders) {
+    for(auto &order : orders_) {
         cout << "№" << it++ << " ";
         order.DebugPrint();
     }
@@ -130,7 +130,7 @@ Orders::Orders(const std::string &path_to_xlsx) {
         if(order_id && start_time && finish_time && from_city && to_city && distance && revenue) {
             assert(order_id > 0);
 
-            orders.push_back(Order{
+            orders_.push_back(Order{
                 order_id.value(),
                 obligation,
                 start_time.value(),
@@ -146,18 +146,29 @@ Orders::Orders(const std::string &path_to_xlsx) {
     }
 }
 
+Orders::Orders(const std::vector<Order>& orders): orders_(orders) {}
+
+Orders::Orders(const Orders& other): orders_(other.orders_) {}
+
 Order Orders::GetOrder(size_t ind) const {
-    if (ind >= orders.size()) {
-        std::cerr << "GetOrder(" << ind << "): out of bounds id > size(" << orders.size() << ")" << std::endl;
+    if (ind >= orders_.size()) {
+        std::cerr << "GetOrder(" << ind << "): out of bounds id > size(" << orders_.size() << ")" << std::endl;
         exit(1);
     }
-    return orders[ind];
+    return orders_[ind];
+}
+const Order& Orders::GetOrderConst(size_t ind) const {
+    if (ind >= orders_.size()) {
+        std::cerr << "GetOrder(" << ind << "): out of bounds id > size(" << orders_.size() << ")" << std::endl;
+        exit(1);
+    }
+    return orders_[ind];
 }
 
 void Orders::AddOrder(const Order& order) {
-    orders.push_back(order);
+    orders_.push_back(order);
 }
 
 size_t Orders::Size() const {
-    return orders.size();
+    return orders_.size();
 }

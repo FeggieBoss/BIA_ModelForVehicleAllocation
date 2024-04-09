@@ -7,10 +7,15 @@
 #include "orders.h"
 #include "distances.h"
 
+#include <unordered_map>
+
 class Data {
 private:
     unsigned int min_timestamp;
 public:
+    std::unordered_map<unsigned int, unsigned int> id_to_real_city;
+    size_t cities_count;
+
     Params params;
     Trucks trucks;
     Orders orders;    
@@ -23,11 +28,15 @@ public:
         const std::string &orders_path,
         const std::string &dists_path
     );
+    Data(const Data& other);
 
     void ShiftTimestamps();
+    void SqueezeCitiesIds();
+
     std::optional<double> MoveBetweenOrders(const Order& previous, const Order& current) const;
     double GetRealOrderRevenue(size_t ind) const;
-    double GetFreeMovementOrderRevenue(size_t ind) const;
+    double GetFreeMovementCost(double distance) const;
+    double GetWaitingCost(double mins) const;
 };
 
 

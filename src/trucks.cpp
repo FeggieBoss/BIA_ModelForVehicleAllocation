@@ -19,7 +19,7 @@ void Truck::DebugPrint() {
 using std::cout;
 using std::endl;
 void Trucks::DebugPrint() {
-    for(auto &truck : trucks) {
+    for(auto &truck : trucks_) {
         truck.DebugPrint();
     }
 }
@@ -73,7 +73,7 @@ Trucks::Trucks(const std::string &path_to_xlsx) {
         cell.next();
 
         if(truck_id && init_time && init_city) {
-            trucks.push_back(Truck{
+            trucks_.push_back(Truck{
                 truck_id.value(),
                 load_type,
                 trailer_type,
@@ -84,14 +84,27 @@ Trucks::Trucks(const std::string &path_to_xlsx) {
     }
 }
 
+
+Trucks::Trucks(const std::vector<Truck>& trucks): trucks_(trucks) {}
+
+Trucks::Trucks(const Trucks& other): trucks_(other.trucks_) {}
+
 Truck Trucks::GetTruck(size_t ind) const {
-    if (ind >= trucks.size()) {
-        std::cerr << "GetTruck(" << ind << "): out of bounds id > size(" << trucks.size() << ")" << std::endl;
+    if (ind >= trucks_.size()) {
+        std::cerr << "GetTruck(" << ind << "): out of bounds id > size(" << trucks_.size() << ")" << std::endl;
         exit(1);
     }
-    return trucks[ind];
+    return trucks_[ind];
+}
+
+const Truck& Trucks::GetTruckConst(size_t ind) const {
+    if (ind >= trucks_.size()) {
+        std::cerr << "GetTruck(" << ind << "): out of bounds id > size(" << trucks_.size() << ")" << std::endl;
+        exit(1);
+    }
+    return trucks_[ind];
 }
 
 size_t Trucks::Size() const {
-    return trucks.size();
+    return trucks_.size();
 }

@@ -32,20 +32,24 @@ public:
 
 class Trucks {
 private:
-    std::vector<Truck> trucks;
+    std::vector<Truck> trucks_;
 public:
     Trucks(){};
     Trucks(const std::string &path_to_xlsx);
+    Trucks(const std::vector<Truck>& trucks);
+    Trucks(const Trucks& other);
 
     std::vector<Truck>::iterator begin() { // NOLINT
-        return trucks.begin();
+        return trucks_.begin();
     }
 
     std::vector<Truck>::iterator end() { // NOLINT
-        return trucks.end();
+        return trucks_.end();
     }
 
     Truck GetTruck(size_t ind) const;
+    const Truck& GetTruckConst(size_t ind) const;
+
     size_t Size() const;
 
     #ifdef DEBUG_MODE

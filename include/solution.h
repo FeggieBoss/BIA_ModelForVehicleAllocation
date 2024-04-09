@@ -4,7 +4,7 @@
 #include <vector>
 
 struct solution_t {
-    std::vector<std::vector<int>> orders_by_truck;
+    std::vector<std::vector<size_t>> orders_by_truck_pos;
 };
 
 #endif // DEFINE_SOLUTION_H
