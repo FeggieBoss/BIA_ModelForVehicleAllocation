@@ -63,13 +63,13 @@ std::optional<double> Checker::Check() {
 
             auto dist_between_orders = dists.GetDistance(previous.to_city, current.from_city); 
             if (!dist_between_orders.has_value()) {
-                std::cerr << "checker error truck(" << truck.truck_id << "): no road between " << previous.to_city << " and " << current.from_city << endl;
+                std::cerr << "checker error truck(" << truck.truck_id << "): no road between " << previous.to_city << " and " << current.from_city << std::endl;
                 exit(1);
             }
 
             unsigned int arriving_time = previous.finish_time + dist_between_orders.value() * 60 / params.speed;
             if (arriving_time > current.start_time) {
-                std::cerr << "checker error truck(" << truck.truck_id << "): arrived too late - time(" << arriving_time << "); order(" << current.order_id << ") starts at " << current.start_time << endl;
+                std::cerr << "checker error truck(" << truck.truck_id << "): arrived too late - time(" << arriving_time << "); order(" << current.order_id << ") starts at " << current.start_time << std::endl;
                 exit(1);
             }
 

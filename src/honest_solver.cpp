@@ -359,7 +359,10 @@ HighsModel HonestSolver::CreateModel() {
             A_non_zeros += row_non_zeros.size();
             model.lp_.a_matrix_.start_.push_back(A_non_zeros);
 
-            LU_debug(0,0);
+            #ifdef DEBUG_MODE
+            LU_debug(0, 0);
+            #endif
+
             for(auto &el : row_non_zeros) {
                 model.lp_.a_matrix_.index_.push_back(el.first);
                 model.lp_.a_matrix_.value_.push_back(el.second);
@@ -398,7 +401,7 @@ HighsModel HonestSolver::CreateModel() {
             if(obligation) {
                 std::cerr << "Error in scheduling obligation order_id("
                     << orders.GetOrderConst(j).order_id << "): no trucks can execute "
-                    << j << "-th order" << endl;
+                    << j << "-th order" << std::endl;
                 exit(1);
             }
         }
@@ -412,7 +415,10 @@ HighsModel HonestSolver::CreateModel() {
         A_non_zeros += row_non_zeros.size();
         model.lp_.a_matrix_.start_.push_back(A_non_zeros);
 
+        #ifdef DEBUG_MODE
         LU_debug(model.lp_.row_lower_.back(), model.lp_.row_upper_.back());
+        #endif
+        
         for(auto &el : row_non_zeros) {
             model.lp_.a_matrix_.index_.push_back(el.first);
             model.lp_.a_matrix_.value_.push_back(el.second);
@@ -459,7 +465,9 @@ HighsModel HonestSolver::CreateModel() {
         A_non_zeros += row_non_zeros.size();
         model.lp_.a_matrix_.start_.push_back(A_non_zeros);
 
+        #ifdef DEBUG_MODE
         LU_debug(model.lp_.row_lower_.back(), model.lp_.row_upper_.back());
+        #endif
         for(auto &el : row_non_zeros) {
             model.lp_.a_matrix_.index_.push_back(el.first);
             model.lp_.a_matrix_.value_.push_back(el.second);
@@ -499,7 +507,10 @@ HighsModel HonestSolver::CreateModel() {
         A_non_zeros += row_non_zeros.size();
         model.lp_.a_matrix_.start_.push_back(A_non_zeros);
 
+        #ifdef DEBUG_MODE
         LU_debug(model.lp_.row_lower_.back(), model.lp_.row_upper_.back());
+        #endif
+
         for(auto &el : row_non_zeros) {
             model.lp_.a_matrix_.index_.push_back(el.first);
             model.lp_.a_matrix_.value_.push_back(el.second);

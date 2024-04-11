@@ -1,5 +1,24 @@
 #include "xlsx_cell.h"
 
+int GetFullMaskLoadType() {
+    return (
+        static_cast<int>(LOAD_TYPE::REAR) |
+        static_cast<int>(LOAD_TYPE::SIDE) |
+        static_cast<int>(LOAD_TYPE::TOP)  | 
+        static_cast<int>(LOAD_TYPE::FULL)
+    );
+}
+
+int GetFullMaskTrailerType() {
+    return (
+        static_cast<int>(TRAILER_TYPE::AWNING)        |
+        static_cast<int>(TRAILER_TYPE::VAN)           |
+        static_cast<int>(TRAILER_TYPE::REFRIDGERATOR) | 
+        static_cast<int>(TRAILER_TYPE::THERMOS)       |
+        static_cast<int>(TRAILER_TYPE::ISOTHERMAL)
+    );
+}
+
 PARAM_NAME GetParamName(const std::string &str_param_name) {
     if(str_param_name == "VELOCITY") {
         return PARAM_NAME::VELOCITY;
@@ -45,35 +64,16 @@ int GetMaskTrailerType(const std::string &str_trailer_type) {
         return static_cast<int>(TRAILER_TYPE::VAN);
     } else if(str_trailer_type == "Термос") {
         return static_cast<int>(TRAILER_TYPE::THERMOS);
-    } else if(str_trailer_type == "Рефриджератор") {
+    } else if(str_trailer_type == "Рефрижератор") {
         return static_cast<int>(TRAILER_TYPE::REFRIDGERATOR);
     } else if(str_trailer_type == "Изотермический") {
         return static_cast<int>(TRAILER_TYPE::ISOTHERMAL);
     } else {
         std::cerr << "unexpected LOAD_TYPE("<<str_trailer_type<<")" << std::endl;
-        exit(1);
+        return GetFullMaskTrailerType();
     }
 
     return static_cast<int>(TRAILER_TYPE::AWNING);
-}
-
-int GetFullMaskLoadType() {
-    return (
-        static_cast<int>(LOAD_TYPE::REAR) |
-        static_cast<int>(LOAD_TYPE::SIDE) |
-        static_cast<int>(LOAD_TYPE::TOP)  | 
-        static_cast<int>(LOAD_TYPE::FULL)
-    );
-}
-
-int GetFullMaskTrailerType() {
-    return (
-        static_cast<int>(TRAILER_TYPE::AWNING)        |
-        static_cast<int>(TRAILER_TYPE::VAN)           |
-        static_cast<int>(TRAILER_TYPE::REFRIDGERATOR) | 
-        static_cast<int>(TRAILER_TYPE::THERMOS)       |
-        static_cast<int>(TRAILER_TYPE::ISOTHERMAL)
-    );
 }
 
 bool IsExecutableBy(

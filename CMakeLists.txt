@@ -6,17 +6,13 @@ if(NOT CMAKE_BUILD_TYPE)
 endif() # cmake .. -DCMAKE_BUILD_TYPE=Release
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
 
-set(HIGHS_DIR ./lib/cmake/highs)
-
-find_package(HIGHS REQUIRED)
-find_package(Threads REQUIRED)
-
-add_subdirectory(OpenXLSX)
-
 include_directories(include)
+include_directories(HiGHs)
 add_executable(main 
     src/xlsx_cell.cpp
     src/params.cpp
@@ -29,7 +25,23 @@ add_executable(main
     src/honest_solver.cpp
     src/weighted_cities_solver.cpp
     src/batch_solver.cpp
-    src/main.cpp 
+    src/main.cpp
 )
+
+# HiGHs
+set(HIGHS_DIR ./HiGHs/lib/cmake/highs)
+find_package(HIGHS REQUIRED)
+find_package(Threads REQUIRED)
 target_link_libraries(main highs::highs)
+
+# OpenXLSX
+add_subdirectory(OpenXLSX)
 target_link_libraries(main OpenXLSX::OpenXLSX)
+
+# GoogleTests
+find_package(GTest)
+if(GTEST_FOUND)
+    add_subdirectory(test)
+else(GTEST_FOUND)
+    message(WARNING "!!! Warning: GTest not found")
+endif(GTEST_FOUND)

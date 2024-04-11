@@ -17,8 +17,8 @@ solution_t Solver::Solve() {
     const HighsModelStatus& model_status = highs.getModelStatus();
     assert(model_status==HighsModelStatus::kOptimal);
     
-    #ifdef DEBUG_MODE
     const HighsInfo& info = highs.getInfo();
+    #ifdef DEBUG_MODE
     cout << "Model status: " << highs.modelStatusToString(model_status) << endl
         << "Simplex iteration count: " << info.simplex_iteration_count << endl
         << "Objective function value: " << info.objective_function_value << endl

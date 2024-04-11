@@ -8,10 +8,10 @@
 #include <cassert>
 
 int main() {
-    std::string params_path = "./../case_1/params_small.xlsx";
-    std::string trucks_path = "./../case_1/trucks_small.xlsx";
-    std::string orders_path = "./../case_1/orders_small.xlsx";
-    std::string dists_path = "./../case_1/distances_small.xlsx";
+    std::string params_path = "./../samples/params_small.xlsx";
+    std::string trucks_path = "./../samples/trucks_small.xlsx";
+    std::string orders_path = "./../samples/orders_small.xlsx";
+    std::string dists_path = "./../samples/distances_small.xlsx";
     
     Data data(params_path, trucks_path, orders_path, dists_path);
 
@@ -41,9 +41,12 @@ int main() {
     // solver.SetVectorW(w);
     // solution_t solution = solver.Solve();
 
+    for (Order &order : data.orders) {
+        order.obligation = 0;
+    }   
 
     BatchSolver solver;
-    solution_t solution = solver.Solve(data, 50);
+    solution_t solution = solver.Solve(data, 24*60);
 
 
     Checker checker(data);
