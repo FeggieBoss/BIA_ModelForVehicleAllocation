@@ -3,6 +3,7 @@ project(month_schedule LANGUAGES CXX)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug) 
+  add_definitions(-DDEBUG_MODE)
 endif() # cmake .. -DCMAKE_BUILD_TYPE=Release
 
 set(CMAKE_CXX_STANDARD 17)
@@ -39,9 +40,12 @@ add_subdirectory(OpenXLSX)
 target_link_libraries(main OpenXLSX::OpenXLSX)
 
 # GoogleTests
-find_package(GTest)
-if(GTEST_FOUND)
-    add_subdirectory(test)
-else(GTEST_FOUND)
-    message(WARNING "!!! Warning: GTest not found")
-endif(GTEST_FOUND)
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG        v1.14.0
+)
+FetchContent_MakeAvailable(googletest)
+
+add_subdirectory(test)
