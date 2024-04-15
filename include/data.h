@@ -22,6 +22,7 @@ public:
     Distances dists;
 
     Data() = default;
+    // Note: call ShiftTimestamps(), SqueezeCitiesIds()
     Data(
         const std::string &params_path,
         const std::string &trucks_path,

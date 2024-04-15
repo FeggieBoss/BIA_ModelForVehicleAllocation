@@ -1,9 +1,28 @@
 #include "solver.h"
 
+size_t Solver::ffo_pos = (size_t)(-1);
+size_t Solver::flo_pos = (size_t)(-2);
+std::function<Order(const Truck&)> Solver::make_ffo = [] (const Truck& truck) -> Order {
+    Order ffo;
+    ffo.to_city = truck.init_city;
+    ffo.finish_time = truck.init_time;
+    return ffo;
+};
+
+std::function<Order(const Order&)> Solver::make_flo = [] (const Order& from_order) -> Order {
+    Order flo;
+    flo.from_city = from_order.to_city;
+    flo.start_time = from_order.finish_time;
+    return flo;
+};
+
 solution_t Solver::Solve() {
     HighsModel model = CreateModel();
     
     Highs highs;
+    #ifndef DEBUG_MODE
+    highs.setOptionValue("output_flag", false);
+    #endif
     HighsStatus return_status;
     
     return_status = highs.passModel(model);
@@ -26,12 +45,8 @@ solution_t Solver::Solve() {
         << "Dual    solution status: " << highs.solutionStatusToString(info.dual_solution_status) << endl
         << "Basis: " << highs.basisValidityToString(info.basis_validity) << endl;
     #endif
-    const bool has_values = info.primal_solution_status;
-    const bool has_duals = info.dual_solution_status;
-    const bool has_basis = info.basis_validity;
     
     const HighsSolution& solution = highs.getSolution();
-    const HighsBasis& basis = highs.getBasis();
     
     model.lp_.integrality_.resize(lp.num_col_);
     for (int col=0; col < lp.num_col_; col++)
@@ -47,11 +62,11 @@ solution_t Solver::Solve() {
     cout << "orders_count = " << data_.orders.Size() << endl;
     #endif
 
-    std::vector<std::vector<size_t>> solution_arr(data_.trucks.Size(), std::vector<size_t>());
+    std::vector<std::vector<size_t>> orders_by_truck_pos(data_.trucks.Size(), std::vector<size_t>());
     size_t orders_count = data_.orders.Size();
     for (int col = 0; col < lp.num_col_; ++col) {
         if (info.primal_solution_status && solution.col_value[col]) {
-            auto& [i,j,k] = to_3d_variables_[col];
+            auto& [i, j, k] = to_3d_variables_[col];
 
             #ifdef DEBUG_MODE
             auto i_id = data_.trucks.GetTruckConst(i).truck_id;
@@ -62,14 +77,14 @@ solution_t Solver::Solve() {
                 auto jth = data_.orders.GetOrderConst(j);
                 printf("\n\t   /// from_order_id(%2d)[from_city(%2d),to_city(%2d)]", jth.order_id, jth.from_city, jth.to_city);
             } else {
-                std::string name = (j == orders_count ? "ffo" : "flo");
+                std::string name = (j == Solver::ffo_pos ? "ffo" : "flo");
                 printf("\n\t   /// %s", name.c_str());
             }
             if (k < orders_count) {
                 auto kth = data_.orders.GetOrderConst(k);
                 printf("\n\t   /// to_order_id(%2d)[from_city(%2d),to_city(%2d)]", kth.order_id, kth.from_city, kth.to_city);
             } else {
-                std::string name = (k == orders_count ? "ffo" : "flo");
+                std::string name = (k == Solver::ffo_pos ? "ffo" : "flo");
                 printf("\n\t   /// %s", name.c_str());
             }
             printf("\n");
@@ -77,13 +92,24 @@ solution_t Solver::Solve() {
 
             // not adding fake orders in solution
             if (j < orders_count)
-                solution_arr[i].push_back(j);
+                orders_by_truck_pos[i].push_back(j);
         }
+    }
+
+    size_t trucks_count = data_.trucks.Size();
+    const Orders& orders = data_.orders;
+    for(size_t truck_pos = 0; truck_pos < trucks_count; ++truck_pos) {
+        auto &scheduled_orders = orders_by_truck_pos[truck_pos];
+
+        // organizing scheduled orders in the order they will be completed
+        sort(scheduled_orders.begin(), scheduled_orders.end(), [&orders](const int& a, const int& b) {
+            return orders.GetOrderConst(a).start_time < orders.GetOrderConst(b).start_time;
+        });
     }
 
     #ifdef DEBUG_MODE
     cout << "SOLVER_DEBUG##" << endl;
     #endif
 
-    return {solution_arr};
+    return {orders_by_truck_pos};
 }

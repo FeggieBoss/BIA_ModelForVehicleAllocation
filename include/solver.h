@@ -56,11 +56,16 @@ namespace std {
     };
 }
 
-// {truck, from_order, to_order}
+// {truck_pos, from_order_pos, to_order_pos}
 typedef std::tuple<size_t, size_t, size_t> variable_t;
 
 class Solver {
 public:
+    static size_t ffo_pos;
+    static size_t flo_pos;
+    static std::function<Order(const Truck&)> make_ffo;
+    static std::function<Order(const Order&)> make_flo;
+
     Data data_;
     // index of variable in vector X -> its 3d/variable_t representation
     std::unordered_map<size_t, variable_t> to_3d_variables_;

@@ -8,7 +8,11 @@ Data::Data(
 ):  params(params_path),
     trucks(trucks_path),
     orders(orders_path),
-    dists(dists_path) {}
+    dists(dists_path) 
+{
+    ShiftTimestamps();
+    SqueezeCitiesIds();
+}
 
 Data::Data(const Data& other): 
     params(other.params), 
@@ -16,7 +20,7 @@ Data::Data(const Data& other):
     orders(other.orders),
     dists(other.dists),
     id_to_real_city(other.id_to_real_city),
-    cities_count(cities_count) {}
+    cities_count(other.cities_count) {}
 
 void Data::ShiftTimestamps() {
     min_timestamp = UINT32_MAX;
@@ -92,16 +96,16 @@ double Data::GetRealOrderRevenue(size_t ind) const {
     Order order = orders.GetOrder(ind);
     double cost = 0.;
 
-    cost -= (order.finish_time - order.start_time) * params.duty_km_cost / 60; // cost of time  
-    cost -= order.distance * params.duty_km_cost;                              // cost of km
-    cost += order.revenue;                                                     // revenue
+    cost -= (order.finish_time - order.start_time) * params.duty_hour_cost / 60; // cost of time  
+    cost -= order.distance * params.duty_km_cost;                                // cost of km
+    cost += order.revenue;                                                       // revenue
     return cost;
 }
 
 double Data::GetFreeMovementCost(double distance) const {
     double cost = 0.;
     cost += distance * params.free_km_cost;
-    cost += (distance / params.speed) * params.duty_hour_cost;
+    cost += (distance / params.speed) * params.free_hour_cost;
     return cost;
 }
 

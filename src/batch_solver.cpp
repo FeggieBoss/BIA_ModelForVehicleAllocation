@@ -30,17 +30,39 @@ void GetBatch(
 }
 
 static void GetCitiesWightsVector(
-    CitiesWeightsVectors& cities_ws,
-    const Data& data,
-    const std::vector<Truck>& batch_trucks,
-    const std::vector<Order>& batch_orders,
+    FreeMovementWeightsVectors& cities_ws,
+    const Data& batch_data,
+    unsigned int time_bound,
     const std::multiset<std::pair<unsigned int, Order>, cmp<Order>>& suf_orders
 ) {
+    static constexpr double eps = 1e-6;
+
     cities_ws.Reset();
+
+    const Trucks& batch_trucks = batch_data.trucks;
+    const Orders& batch_orders = batch_data.orders;
+
+    const size_t batch_trucks_count = batch_trucks.Size();
+    const size_t batch_orders_count = batch_orders.Size();
+
+    /*
+        Each truck will either
+        (1) do at least one order
+        (2) or will stay at initial city
+
+        So what we really want to do here is just add free-movement edges from to_city of some order or init_city of some truck
+        to some future_order.from_city if its really 'worth' doing.
+        
+        Note: solver wont use one of such edges twice but its still goin to work
+        (1) because each truck has its own last order by same reasons and we will add edges for this order
+        (2) we will add multiple edges for some cities which is init_city for more than one truck
+    */
     for (const auto& [_, future_order] : suf_orders) {
         unsigned int to_city = future_order.from_city;
 
-        for (const auto& truck : batch_trucks) {
+        for (size_t truck_pos = 0; truck_pos < batch_trucks_count; ++truck_pos) {
+            const Truck& truck = batch_trucks.GetTruckConst(truck_pos);
+
             if (!IsExecutableBy(
                 truck.mask_load_type, 
                 truck.mask_trailer_type, 
@@ -50,47 +72,56 @@ static void GetCitiesWightsVector(
                 continue;
             }
 
-            auto update_cities_ws = [&future_order, &truck, &cities_ws, &data, to_city](
+            auto update_cities_ws = [&future_order, &truck, &cities_ws, &batch_data, to_city](
                 unsigned int from_city, 
                 unsigned int start_time, 
-                unsigned int order_id) 
+                size_t truck_pos,
+                size_t order_pos) 
             {
-                auto distance = data.dists.GetDistance(from_city, to_city);
+                auto distance = batch_data.dists.GetDistance(from_city, to_city);
                 if (!distance.has_value()) {
                     // there is no road between this two cities
                     return;
                 }
                 double d = distance.value();
                 
-                unsigned int finish_time = start_time + (d * 60. / data.params.speed);
+                unsigned int finish_time = start_time + (d * 60. / batch_data.params.speed);
                 if (finish_time > future_order.start_time) {
                     // no way to get there in time
                     return;
                 }
 
-                double weight = future_order.revenue;
-                weight -= data.GetFreeMovementCost(d);
-                weight -= data.GetWaitingCost(future_order.start_time - finish_time);
+                double revenue = future_order.revenue;
+                double free_movement_cost = batch_data.GetFreeMovementCost(d);
+                double waiting_cost = batch_data.GetWaitingCost(future_order.start_time - finish_time);
 
-                cities_ws.AddWeight(to_city, truck.truck_id, order_id, weight);
+                if (revenue >= free_movement_cost + waiting_cost + eps || future_order.obligation) {
+                    // we aint taking in account movement cost because our model will do it by itself later
+                    revenue -= waiting_cost;
+                    cities_ws.AddWeight(to_city, truck_pos, order_pos, revenue);
+                }
             };
 
             // processing all real last_orders
-            for (const Order& last_order : batch_orders) {
-                if (!IsExecutableBy(
+            for (size_t order_pos = 0; order_pos < batch_orders_count; ++order_pos) {
+                const Order& last_order = batch_orders.GetOrderConst(order_pos);
+
+                if (last_order.finish_time >= time_bound) {
+                    continue;
+                } else if (!IsExecutableBy(
                     truck.mask_load_type, 
                     truck.mask_trailer_type, 
                     last_order.mask_load_type, 
                     last_order.mask_trailer_type)
                 ) { // bad trailer or load type
-                    return;
+                    continue;
                 }
-                update_cities_ws(last_order.to_city, last_order.finish_time, last_order.order_id);
+                update_cities_ws(last_order.to_city, last_order.finish_time, truck_pos, order_pos);
             }
 
             // processing our last order is ffo <=> we wont make any orders on current batch at all
             {
-                update_cities_ws(truck.init_city, truck.init_time, 0);
+                update_cities_ws(truck.init_city, truck.init_time, truck_pos, Solver::ffo_pos);
             }
         }
     }
@@ -135,7 +166,7 @@ solution_t BatchSolver::Solve(const Data& data, unsigned int time_window) {
     std::vector<Truck> batch_trucks;
     std::vector<Order> batch_orders;
 
-    CitiesWeightsVectors cities_ws(data.cities_count + 1);
+    FreeMovementWeightsVectors cities_ws(data.cities_count);
     WeightedCitiesSolver solver;
     for(unsigned int cur_time_window = time_window;; cur_time_window += time_window) {
         // check if we processed all orders
@@ -159,7 +190,7 @@ solution_t BatchSolver::Solve(const Data& data, unsigned int time_window) {
         batch_data.orders = batch_orders;
         
         // Solving problem with current batches
-        GetCitiesWightsVector(cities_ws, data, batch_trucks, batch_orders, order_by_start_time);
+        GetCitiesWightsVector(cities_ws, batch_data, cur_time_window, order_by_start_time);
         solver.SetData(batch_data, cur_time_window, cities_ws);
         solution_t batch_solution = solver.Solve();
 

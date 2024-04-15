@@ -1,7 +1,6 @@
 #ifndef DEFINE_BATCH_SOLVER_H
 #define DEFINE_BATCH_SOLVER_H
 
-#include "main.h"
 #include "weighted_cities_solver.h"
 
 class BatchSolver {

@@ -33,11 +33,6 @@ std::optional<double> Checker::Check() {
     for(size_t truck_pos = 0; truck_pos < trucks_count; ++truck_pos) {
         auto &scheduled_orders = orders_by_truck_pos[truck_pos];
 
-        // organizing scheduled orders in the order they will be completed
-        sort(scheduled_orders.begin(), scheduled_orders.end(), [&orders](const int& a, const int& b) {
-            return orders.GetOrderConst(a).start_time < orders.GetOrderConst(b).start_time;
-        });
-
         complete_orders_count += scheduled_orders.size();
 
         const Truck& truck = trucks.GetTruckConst(truck_pos);
