@@ -33,6 +33,7 @@ static void GetCitiesWightsVector(
     FreeMovementWeightsVectors& cities_ws,
     const Data& batch_data,
     unsigned int time_bound,
+    unsigned int time_window,
     const std::multiset<std::pair<unsigned int, Order>, cmp<Order>>& suf_orders
 ) {
     static constexpr double eps = 1e-6;
@@ -58,6 +59,9 @@ static void GetCitiesWightsVector(
         (2) we will add multiple edges for some cities which is init_city for more than one truck
     */
     for (const auto& [_, future_order] : suf_orders) {
+        if (future_order.start_time >= time_bound + time_window) {
+            break;
+        }
         unsigned int to_city = future_order.from_city;
 
         for (size_t truck_pos = 0; truck_pos < batch_trucks_count; ++truck_pos) {
@@ -91,7 +95,7 @@ static void GetCitiesWightsVector(
                     return;
                 }
 
-                double revenue = future_order.revenue;
+                double revenue = batch_data.GetRealOrderRevenue(future_order);
                 double free_movement_cost = batch_data.GetFreeMovementCost(d);
                 double waiting_cost = batch_data.GetWaitingCost(future_order.start_time - finish_time);
 
@@ -123,6 +127,23 @@ static void GetCitiesWightsVector(
             {
                 update_cities_ws(truck.init_city, truck.init_time, truck_pos, Solver::ffo_pos);
             }
+        }
+    }
+}
+
+static void FilterSuffix(
+    std::multiset<std::pair<unsigned int, Truck>, cmp<Truck>>& trucks_by_init_time,
+    std::multiset<std::pair<unsigned int, Order>, cmp<Order>>& order_by_start_time
+) {
+    assert(!trucks_by_init_time.empty());
+
+    unsigned int min_init_time = trucks_by_init_time.begin()->first;
+    while (!order_by_start_time.empty()) {
+        auto it = order_by_start_time.begin();
+        if (it->first < min_init_time) {
+            order_by_start_time.erase(it);
+        } else {
+            break;
         }
     }
 }
@@ -161,6 +182,8 @@ solution_t BatchSolver::Solve(const Data& data, unsigned int time_window) {
     for (const Order& order : orders) {
         order_by_start_time.emplace(order.start_time, order);
     }
+    // Making sure we dont have useless orders
+    FilterSuffix(trucks_by_init_time, order_by_start_time);
 
     // Current batches of trucks/orders
     std::vector<Truck> batch_trucks;
@@ -188,14 +211,34 @@ solution_t BatchSolver::Solve(const Data& data, unsigned int time_window) {
         Data batch_data(data);
         batch_data.trucks = batch_trucks;
         batch_data.orders = batch_orders;
+
+        /*
+            Same additional bits will be used later in LOAD_TYPE of free-movement edges of this truck 
+            this will block other trucks from picking this edges => reduce amount of variables in LP model
+        */
+        for (size_t batch_truck_pos = 0; batch_truck_pos < batch_data.trucks.Size(); ++batch_truck_pos) {
+            Truck& truck = trucks.GetTruckRef(batch_truck_pos);
+            truck.mask_load_type += batch_truck_pos * (1 << LOAD_TYPE_COUNT);
+        }
+
+        std::cout << "BATCH_DEBUG: " << batch_data.trucks.Size() << " " << batch_data.orders.Size() << std::endl;
+
+        #ifdef DEBUG_MODE
+        std::cout << "##BATCH_DEBUG" << std::endl;
+        batch_data.trucks.DebugPrint();
+        batch_data.orders.DebugPrint();
+        std::cout << "BATCH_DEBUG##" << std::endl << std::endl;
+        #endif   
         
         // Solving problem with current batches
-        GetCitiesWightsVector(cities_ws, batch_data, cur_time_window, order_by_start_time);
+        GetCitiesWightsVector(cities_ws, batch_data, cur_time_window, time_window, order_by_start_time);
         solver.SetData(batch_data, cur_time_window, cities_ws);
         solution_t batch_solution = solver.Solve();
 
         // We want to work with free-movement orders (read Note in weighted_cities_solver.h)
         const Data& modified_batch_data = solver.GetDataConst();
+
+        std::cout << "BATCH_DEBUG: with additional orders (" << modified_batch_data.orders.Size() << ")" << std::endl;
 
         // Merging solutions
         size_t batch_trucks_count = modified_batch_data.trucks.Size();
@@ -234,6 +277,13 @@ solution_t BatchSolver::Solve(const Data& data, unsigned int time_window) {
         // Releasing old batches
         batch_trucks.clear();
         batch_orders.clear();
+
+
+        /*
+            Making sure we dont have useless orders 
+            Why do we call it again? - trucks init_time's just changed so we have different state right now
+        */
+        FilterSuffix(trucks_by_init_time, order_by_start_time);
     }
 
     return main_solution;

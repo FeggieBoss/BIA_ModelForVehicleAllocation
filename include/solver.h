@@ -66,6 +66,8 @@ public:
     static std::function<Order(const Truck&)> make_ffo;
     static std::function<Order(const Order&)> make_flo;
 
+    static bool IsFakeOrder(size_t order_pos);
+
     Data data_;
     // index of variable in vector X -> its 3d/variable_t representation
     std::unordered_map<size_t, variable_t> to_3d_variables_;

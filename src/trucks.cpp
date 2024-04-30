@@ -3,7 +3,7 @@
 #ifdef DEBUG_MODE
 using std::cout;
 using std::endl;
-void Truck::DebugPrint() {
+void Truck::DebugPrint() const {
     cout<<std::fixed<<std::setprecision(5)
         <<"##TRUCK_DEBUG:"<<endl
         <<"truck_id is "<<truck_id<<endl
@@ -18,7 +18,7 @@ void Truck::DebugPrint() {
 #ifdef DEBUG_MODE
 using std::cout;
 using std::endl;
-void Trucks::DebugPrint() {
+void Trucks::DebugPrint() const {
     for(auto &truck : trucks_) {
         truck.DebugPrint();
     }
@@ -98,6 +98,15 @@ Truck Trucks::GetTruck(size_t ind) const {
 }
 
 const Truck& Trucks::GetTruckConst(size_t ind) const {
+    if (ind >= trucks_.size()) {
+        std::cerr << "GetTruck(" << ind << "): out of bounds id > size(" << trucks_.size() << ")" << std::endl;
+        exit(1);
+    }
+    return trucks_[ind];
+}
+
+
+Truck& Trucks::GetTruckRef(size_t ind) {
     if (ind >= trucks_.size()) {
         std::cerr << "GetTruck(" << ind << "): out of bounds id > size(" << trucks_.size() << ")" << std::endl;
         exit(1);

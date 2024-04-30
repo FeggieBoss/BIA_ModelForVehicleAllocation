@@ -19,6 +19,7 @@ Data::Data(const Data& other):
     trucks(other.trucks),
     orders(other.orders),
     dists(other.dists),
+    min_timestamp(other.min_timestamp),
     id_to_real_city(other.id_to_real_city),
     cities_count(other.cities_count) {}
 
@@ -92,14 +93,18 @@ std::optional<double> Data::MoveBetweenOrders(const Order& previous, const Order
     return cost;
 }
 
-double Data::GetRealOrderRevenue(size_t ind) const {
-    Order order = orders.GetOrder(ind);
+double Data::GetRealOrderRevenue(const Order& order) const {
     double cost = 0.;
 
     cost -= (order.finish_time - order.start_time) * params.duty_hour_cost / 60; // cost of time  
     cost -= order.distance * params.duty_km_cost;                                // cost of km
     cost += order.revenue;                                                       // revenue
     return cost;
+}
+
+double Data::GetRealOrderRevenue(size_t ind) const {
+    const Order& order = orders.GetOrderConst(ind);
+    return GetRealOrderRevenue(order);
 }
 
 double Data::GetFreeMovementCost(double distance) const {

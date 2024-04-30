@@ -6,6 +6,7 @@
 #include <OpenXLSX.hpp>
 
 #include <optional>
+#include <cstring>
 
 using namespace OpenXLSX;
 
@@ -20,11 +21,12 @@ enum class PARAM_NAME {
     REST_HOUR_PRICE,
 };
 
+constexpr size_t LOAD_TYPE_COUNT = 4;
 enum class LOAD_TYPE {
-    REAR = (1<<0),
-    SIDE = (1<<1),
-    TOP  = (1<<2),
-    FULL = (1<<3),
+    REAR  = (1<<0),
+    SIDE  = (1<<1),
+    TOP   = (1<<2),
+    FULL  = (1<<3),
 };
 
 enum class TRAILER_TYPE {

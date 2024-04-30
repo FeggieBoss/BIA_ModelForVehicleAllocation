@@ -31,14 +31,8 @@ HighsModel HonestSolver::CreateModel() {
     model.lp_.a_matrix_.format_ = MatrixFormat::kRowwise;
     model.lp_.offset_ = 0;
 
-
-    // processing l,u + storing non zero variables
-    // model.lp_.col_lower_, model.lp_.col_upper_
-    #ifdef NO_LONG_EDGES
-    int no_long_edges = 0;
-    #endif
-
     // variable_t -> its index in vector X
+    std::vector<variable_t> variables;
     std::unordered_map<variable_t, size_t> to_index;
     auto GetVariableIndex = [&to_index] (const variable_t& v) -> std::optional<size_t> {
         auto it = to_index.find(v);
@@ -48,6 +42,9 @@ HighsModel HonestSolver::CreateModel() {
         return it->second;
     };
 
+
+    // processing l,u + storing non zero variables
+    // model.lp_.col_lower_, model.lp_.col_upper_
     /*
         Note: for the sake of practicality and brevity: i = truck_pos, j = from_order_pos, k = to_order_pos
 
@@ -71,8 +68,7 @@ HighsModel HonestSolver::CreateModel() {
 
             for (size_t to_order_pos = 0; to_order_pos < orders_count; ++to_order_pos) {
                 const Order& to_order = orders.GetOrderConst(to_order_pos);
-                
-                int l = 0;
+
                 int u = 1; 
                 if (from_order_pos == to_order_pos) { // cant pick same order twice
                     u = 0;
@@ -93,12 +89,7 @@ HighsModel HonestSolver::CreateModel() {
                 }
 
                 if (u != 0) {
-                    size_t ind = model.lp_.col_lower_.size();
-                    to_index[{truck_pos, from_order_pos, to_order_pos}] = ind;
-                    Solver::to_3d_variables_[ind] = {truck_pos, from_order_pos, to_order_pos};
-
-                    model.lp_.col_lower_.push_back(l);
-                    model.lp_.col_upper_.push_back(u);
+                    variables.push_back({truck_pos, from_order_pos, to_order_pos});
                 }
             }
         }
@@ -113,8 +104,6 @@ HighsModel HonestSolver::CreateModel() {
 
         for (size_t to_order_pos = 0; to_order_pos < orders_count; ++to_order_pos) {
             const Order& to_order = orders.GetOrderConst(to_order_pos);
-                
-            int l = 0;
             int u = 1; 
 
             // we suppose to let any truck pick fake first order so we wont check any conditions for this order
@@ -132,11 +121,7 @@ HighsModel HonestSolver::CreateModel() {
             }
 
             if (u != 0) {
-                size_t ind = model.lp_.col_lower_.size();
-                to_index[{truck_pos, Solver::ffo_pos, to_order_pos}] = ind;
-                Solver::to_3d_variables_[ind] = {truck_pos, Solver::ffo_pos, to_order_pos};
-                model.lp_.col_lower_.push_back(l);
-                model.lp_.col_upper_.push_back(u);
+                variables.push_back({truck_pos, Solver::ffo_pos, to_order_pos});
             }
         }
     }
@@ -154,8 +139,6 @@ HighsModel HonestSolver::CreateModel() {
             Order to_order = Solver::make_flo(from_order);
             */
             // but its more easier to just not check them
-                
-            int l = 0;
             int u = 1; 
 
             // we suppose to let any truck pick fake last order so we wont check any conditions for this order
@@ -174,22 +157,32 @@ HighsModel HonestSolver::CreateModel() {
             }
 
             if (u != 0) {
-                size_t ind = model.lp_.col_lower_.size();
-                to_index[{truck_pos, from_order_pos, Solver::flo_pos}] = ind;
-                Solver::to_3d_variables_[ind] = {truck_pos, from_order_pos, Solver::flo_pos};
-                model.lp_.col_lower_.push_back(l);
-                model.lp_.col_upper_.push_back(u);
+                variables.push_back({truck_pos, from_order_pos, Solver::flo_pos});
             }
         }
     }
 
     // lets also let any truck to just pick only fake orders <=> simply not doing any real orders
     for (size_t truck_pos = 0; truck_pos < trucks_count; ++truck_pos) {
-        size_t ind = model.lp_.col_lower_.size();
-        to_index[{truck_pos, Solver::ffo_pos, Solver::flo_pos}] = ind;
-        Solver::to_3d_variables_[ind] = {truck_pos, Solver::ffo_pos, Solver::flo_pos};
+        variables.push_back({truck_pos, Solver::ffo_pos, Solver::flo_pos});
+    }
+
+    // #ifdef DEBUG_MODE
+    std::cout << "variables (before PreSolve): " << variables.size() << std::endl;
+    // #endif
+
+    // filtering variables
+    PreSolver pre_solver(variables);
+    variables = pre_solver.GetFilteredVariables();
+    
+    // mapping variables to its indices in the model(indices of its columns) and vice versa
+    for (size_t index = 0; index < variables.size(); ++index) {
+        const variable_t& var = variables[index];
+
+        to_index[var] = index;
+        Solver::to_3d_variables_[index] = var;
         model.lp_.col_lower_.push_back(0);
-        model.lp_.col_upper_.push_back(1);
+        model.lp_.col_upper_.push_back(1);          
     }
 
     #ifdef DEBUG_MODE
@@ -218,10 +211,9 @@ HighsModel HonestSolver::CreateModel() {
     #ifdef NO_LONG_EDGES
     cout << "[flag]no long edges: " << no_long_edges << " (out of " << n*m*m << ")" << endl;
     #endif
-    #ifdef DEBUG_MODE
-    cout << "non zero variables: " << Solver::to_3d_variables_.size() << " (out of " << trucks_count*(orders_count+1)*(orders_count+1) << ")" << endl;
-    cout << "variables: " << Solver::to_3d_variables_.size() << endl;
-    #endif
+    // #ifdef DEBUG_MODE
+    std::cout << "non zero variables: " << Solver::to_3d_variables_.size() << " (out of " << trucks_count*(orders_count+1)*(orders_count+1) << ")" << std::endl;
+    // #endif
 
     // setting number of rows in l,u,x (number of variables)
     model.lp_.num_col_ = Solver::to_3d_variables_.size();

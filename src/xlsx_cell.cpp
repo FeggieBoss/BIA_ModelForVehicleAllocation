@@ -58,19 +58,55 @@ int GetMaskLoadType(const std::string &str_load_type) {
 }
 
 int GetMaskTrailerType(const std::string &str_trailer_type) {
-    if(str_trailer_type == "Тент") {
-        return static_cast<int>(TRAILER_TYPE::AWNING);
-    } else if(str_trailer_type == "Фургон") {
-        return static_cast<int>(TRAILER_TYPE::VAN);
-    } else if(str_trailer_type == "Термос") {
-        return static_cast<int>(TRAILER_TYPE::THERMOS);
-    } else if(str_trailer_type == "Рефрижератор") {
-        return static_cast<int>(TRAILER_TYPE::REFRIDGERATOR);
-    } else if(str_trailer_type == "Изотермический") {
-        return static_cast<int>(TRAILER_TYPE::ISOTHERMAL);
-    } else {
-        std::cerr << "unexpected LOAD_TYPE("<<str_trailer_type<<")" << std::endl;
-        return GetFullMaskTrailerType();
+    assert(!str_trailer_type.empty());
+    int mask = 0;
+
+    auto strchr_ = [str = str_trailer_type.data()](size_t start, int ch) -> size_t {
+        const char* next = strchr(str + start, ch);
+        if (next == NULL) {
+            return (size_t)(-1); // (unsigned long)18446744073709551615UL
+        }
+        return (size_t)(next - str);
+    };
+
+    for (size_t start = 0; start < str_trailer_type.size();) {
+        size_t next = strchr_(start, ',');
+        if (next == (size_t)(-1)) { // (unsigned long)18446744073709551615UL
+            next = str_trailer_type.size();
+        }
+        
+        /*
+            getting sub trailer type
+            for example: str_trailer_type = "Рефрижератор, Тент, Термос, Фургон"
+            sub_trailer_type0 = "Рефриджератор"
+            sub_trailer_type1 = "Тент"
+            sub_trailer_type2 = "Термос"
+            sub_trailer_type3 = "Фургон"
+        */
+        std::string sub_trailer_type = str_trailer_type.substr(start, next - start);
+        sub_trailer_type.erase(std::remove(sub_trailer_type.begin(), sub_trailer_type.end(), ' '), sub_trailer_type.end());
+
+        start = next + 1;
+
+        if(sub_trailer_type == "Тент") {
+            mask |= static_cast<int>(TRAILER_TYPE::AWNING);
+        } 
+        else if(sub_trailer_type == "Фургон") {
+            mask |= static_cast<int>(TRAILER_TYPE::VAN);
+        } 
+        else if(sub_trailer_type == "Термос") {
+            mask |= static_cast<int>(TRAILER_TYPE::THERMOS);
+        } 
+        else if(sub_trailer_type == "Рефрижератор") {
+            mask |= static_cast<int>(TRAILER_TYPE::REFRIDGERATOR);
+        } 
+        else if(sub_trailer_type == "Изотермический") {
+            mask |= static_cast<int>(TRAILER_TYPE::ISOTHERMAL);
+        } 
+        else {
+            std::cerr << "unexpected TRAILER_TYPE("<<str_trailer_type<<")" << std::endl;
+            return GetFullMaskTrailerType();
+        }
     }
 
     return static_cast<int>(TRAILER_TYPE::AWNING);
@@ -142,14 +178,14 @@ std::optional<unsigned int> XLSXcell::get_time_value() {
     {
     case XLValueType::Float: {
         tm t = v.get<XLDateTime>().tm();
-        x = (mktime(&t)+59)/60;
+        x = (mktime(&t) + three_hours + 59)/60;
         break;
     }
     
     case XLValueType::Integer: {
         long long y = (1LL * (v.get<int>()) * 24 * 60 * 60 - serial_unix_offset);
         tm t = *std::gmtime(reinterpret_cast<time_t*>(&y));
-        x = (mktime(&t)+59)/60;
+        x = (mktime(&t) + three_hours + 59)/60;
         //std::cout<<ctime(reinterpret_cast<time_t*>(&y))<<std::endl;
         break;
     }
@@ -161,6 +197,7 @@ std::optional<unsigned int> XLSXcell::get_time_value() {
         #endif
         return std::nullopt;
     }
+
     return {x};
 }
 

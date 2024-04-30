@@ -10,9 +10,8 @@
 #include <unordered_map>
 
 class Data {
-private:
-    unsigned int min_timestamp;
 public:
+    unsigned int min_timestamp;
     std::unordered_map<unsigned int, unsigned int> id_to_real_city;
     size_t cities_count;
 
@@ -35,6 +34,7 @@ public:
     void SqueezeCitiesIds();
 
     std::optional<double> MoveBetweenOrders(const Order& previous, const Order& current) const;
+    double GetRealOrderRevenue(const Order& order) const;
     double GetRealOrderRevenue(size_t ind) const;
     double GetFreeMovementCost(double distance) const;
     double GetWaitingCost(double mins) const;

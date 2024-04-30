@@ -11,7 +11,26 @@ void Checker::SetSolution(const solution_t& solution) {
     solution_ = solution;
 }
 
+static std::string epoch_to_utc(long epoch) {
+  const time_t old = (time_t)epoch;
+  struct tm *oldt = gmtime(&old);
+  std::string str_time = asctime(oldt);
+  str_time.erase(--str_time.end());
+  return str_time;
+}
+
 std::optional<double> Checker::Check() {
+    auto print_city = [id_to_real_city = &data_.id_to_real_city](unsigned int city) {
+        unsigned int real_city = (*id_to_real_city)[city];
+        return real_city;
+    };
+
+    auto print_time = [min_timestamp = data_.min_timestamp](unsigned int time_epoch_minutes) {
+        long epoch = time_epoch_minutes + min_timestamp;
+        epoch *= 60;
+        return epoch_to_utc(epoch);
+    };
+
     #ifdef DEBUG_MODE
     cout << "##SOLUTION_DEBUG" << endl;
     #endif
@@ -47,7 +66,7 @@ std::optional<double> Checker::Check() {
         }
         cout << "}" << endl;
 
-        cout << "initial time(" << truck.init_time << "), city(" << truck.init_city << ")" << endl;
+        cout << "initial time(" << print_time(truck.init_time) << "), city(" << print_city(truck.init_city) << ")" << endl;
         #endif
 
         Order previous;
@@ -58,13 +77,13 @@ std::optional<double> Checker::Check() {
 
             auto dist_between_orders = dists.GetDistance(previous.to_city, current.from_city); 
             if (!dist_between_orders.has_value()) {
-                std::cerr << "checker error truck(" << truck.truck_id << "): no road between " << previous.to_city << " and " << current.from_city << std::endl;
+                std::cerr << "checker error truck(" << truck.truck_id << "): no road between " << print_city(previous.to_city) << " and " << print_city(current.from_city) << std::endl;
                 exit(1);
             }
 
             unsigned int arriving_time = previous.finish_time + dist_between_orders.value() * 60 / params.speed;
             if (arriving_time > current.start_time) {
-                std::cerr << "checker error truck(" << truck.truck_id << "): arrived too late - time(" << arriving_time << "); order(" << current.order_id << ") starts at " << current.start_time << std::endl;
+                std::cerr << "checker error truck(" << truck.truck_id << "): arrived too late - time(" << print_time(arriving_time) << "); order(" << current.order_id << ") starts at " << print_time(current.start_time) << std::endl;
                 exit(1);
             }
 
@@ -81,11 +100,11 @@ std::optional<double> Checker::Check() {
             #ifdef DEBUG_MODE
             cout << std::fixed << std::setprecision(5) 
                 << "[got " << revenue 
-                << "]: arrive at city(" << current.from_city 
-                << ") at time(" << arriving_time 
-                << ") wait till time(" << current.start_time 
-                << ") and move to city(" << current.to_city 
-                << ") by time(" << current.finish_time << ")" << endl;
+                << "]: arrive at city(" << print_city(current.from_city)
+                << ") at time(" << print_time(arriving_time)
+                << ") wait till time(" << print_time(current.start_time)
+                << ") and move to city(" << print_city(current.to_city)
+                << ") by time(" << print_time(current.finish_time) << ")" << endl;
             #endif 
 
             if (current.obligation) {

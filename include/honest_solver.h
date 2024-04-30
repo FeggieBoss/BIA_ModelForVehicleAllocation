@@ -1,7 +1,7 @@
 #ifndef DEFINE_HONEST_SOLVER_H
 #define DEFINE_HONEST_SOLVER_H
 
-#include "solver.h"
+#include "pre_solver.h"
 
 class HonestSolver : public Solver {
 public:

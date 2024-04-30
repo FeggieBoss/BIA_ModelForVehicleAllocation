@@ -49,7 +49,7 @@ public:
     );
     
     #ifdef DEBUG_MODE
-    void DebugPrint();
+    void DebugPrint() const;
     #endif
 };
 
@@ -76,7 +76,7 @@ public:
     size_t Size() const;
 
     #ifdef DEBUG_MODE
-    void DebugPrint();
+    void DebugPrint() const;
     #endif
 };
 

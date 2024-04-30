@@ -4,7 +4,7 @@
 using std::cout;
 using std::endl;
 
-void Order::DebugPrint() {
+void Order::DebugPrint() const {
     cout<<std::fixed<<std::setprecision(5)
         <<"##ORDER_DEBUG:"<<endl
         <<"order_id is "<<order_id<<endl
@@ -24,7 +24,7 @@ void Order::DebugPrint() {
 #ifdef DEBUG_MODE
 using std::cout;
 using std::endl;
-void Orders::DebugPrint() {
+void Orders::DebugPrint() const {
     int it = 0;
     for(auto &order : orders_) {
         cout << "№" << it++ << " ";

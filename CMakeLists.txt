@@ -4,7 +4,7 @@ project(month_schedule LANGUAGES CXX)
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL Debug)
     set(CMAKE_BUILD_TYPE Debug) 
     add_definitions(-DDEBUG_MODE)
-endif() # cmake .. -DCMAKE_BUILD_TYPE=Release
+endif() # DCMAKE_BUILD_TYPE=Release
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,6 +27,7 @@ set(sources
     src/honest_solver.cpp
     src/weighted_cities_solver.cpp
     src/batch_solver.cpp
+    src/pre_solver.cpp
 )
 add_executable(main
     src/main.cpp

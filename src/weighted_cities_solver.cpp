@@ -74,6 +74,8 @@ void WeightedCitiesSolver::ModifyData(Data& data) const {
         unsigned int from_city, 
         unsigned int to_city, 
         unsigned int start_time,
+        int mask_load_type, 
+        int mask_trailer_type, 
         double revenue_bonus) {
             
         if (from_city == to_city) return;
@@ -112,14 +114,17 @@ void WeightedCitiesSolver::ModifyData(Data& data) const {
             finish_time,                // finish_time
             from_city,                  // from_city
             to_city,                    // to_city
-            GetFullMaskLoadType(),      // mask_load_type
-            GetFullMaskTrailerType(),   // mask_trailer_type
+            mask_load_type,             // mask_load_type
+            mask_trailer_type,          // mask_trailer_type
             d,                          // distance
             revenue                     // revenue
         };
         
         orders.AddOrder(new_order);
     };
+
+    // there is no point to add free-movement edges twice
+    std::unordered_set<std::tuple<unsigned int, unsigned int, unsigned int>> used;
 
     for (unsigned int to_city = 1; to_city <= data.cities_count; ++to_city) {
         const auto& weights_vec = cities_ws_.GetWeightsVector(to_city);
@@ -130,8 +135,8 @@ void WeightedCitiesSolver::ModifyData(Data& data) const {
             unsigned int start_time;
             double revenue_bonus = w;
 
+            const Truck& truck = trucks.GetTruckConst(truck_pos);
             if (order_pos == Solver::ffo_pos) {
-                const Truck& truck = trucks.GetTruckConst(truck_pos);
                 from_city = truck.init_city;
                 start_time = truck.init_time;
             } else {
@@ -139,7 +144,18 @@ void WeightedCitiesSolver::ModifyData(Data& data) const {
                 from_city = order.to_city;
                 start_time = order.finish_time;
             }
-            add_edges(from_city, to_city, start_time, revenue_bonus);
+            
+            std::tuple<unsigned int, unsigned int, unsigned int> tuple_key = {from_city, to_city, start_time};
+            // checking if we already tried to add this edge
+            {
+                auto it = used.find(tuple_key);
+                if (it != used.end()) {
+                    continue;
+                }
+            }
+            int mask_load_type = truck.mask_load_type + truck_pos * (1 << LOAD_TYPE_COUNT);
+            add_edges(from_city, to_city, start_time, mask_load_type, truck.mask_trailer_type, revenue_bonus);
+            used.emplace(tuple_key);
         }
     }
 

@@ -16,6 +16,11 @@ std::function<Order(const Order&)> Solver::make_flo = [] (const Order& from_orde
     return flo;
 };
 
+
+bool Solver::IsFakeOrder(size_t order_pos) {
+    return (order_pos == ffo_pos || order_pos == flo_pos);
+}
+
 solution_t Solver::Solve() {
     HighsModel model = CreateModel();
     

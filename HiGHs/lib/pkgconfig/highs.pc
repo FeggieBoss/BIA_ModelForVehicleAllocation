@@ -1,6 +1,6 @@
-prefix=/home/feggie/MyData/BIA
-libdir=/home/feggie/MyData/BIA/lib
-includedir=/home/feggie/MyData/BIA/include/highs
+prefix=/home/feggie/MyData/BIA/BIA_MonthlySchedule
+libdir=/home/feggie/MyData/BIA/BIA_MonthlySchedule/lib
+includedir=/home/feggie/MyData/BIA/BIA_MonthlySchedule/include/highs
 
 Name: HiGHS
 Description: Linear Optimization Software

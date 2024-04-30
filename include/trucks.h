@@ -26,7 +26,7 @@ public:
         unsigned int init_city
     );
     #ifdef DEBUG_MODE
-    void DebugPrint();
+    void DebugPrint() const;
     #endif
 };
 
@@ -49,11 +49,12 @@ public:
 
     Truck GetTruck(size_t ind) const;
     const Truck& GetTruckConst(size_t ind) const;
+    Truck& GetTruckRef(size_t ind);
 
     size_t Size() const;
 
     #ifdef DEBUG_MODE
-    void DebugPrint();
+    void DebugPrint() const;
     #endif
 };
 

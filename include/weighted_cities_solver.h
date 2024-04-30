@@ -4,6 +4,7 @@
 #include "honest_solver.h"
 
 #include <set>
+#include <unordered_set>
 
 /*
     Provides weights for all cities parameterized by {truck_pos, order_pos}
