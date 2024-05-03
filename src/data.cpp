@@ -74,7 +74,7 @@ void Data::SqueezeCitiesIds() {
 }
 
 
-std::optional<double> Data::MoveBetweenOrders(const Order& previous, const Order& current) const {
+std::optional<double> Data::CostMovingBetweenOrders(const Order& previous, const Order& current) const {
     double cost = 0.;
 
     auto dist_between_orders = dists.GetDistance(previous.to_city, current.from_city); 
@@ -82,8 +82,7 @@ std::optional<double> Data::MoveBetweenOrders(const Order& previous, const Order
         return std::nullopt;
 
     double d = dist_between_orders.value();
-    cost -= d/params.speed * params.free_hour_cost; // cost of time
-    cost -= d*params.free_km_cost;                  // cost of km
+    cost -= GetFreeMovementCost(d);
 
     unsigned int arriving_time = previous.finish_time + d * 60 / params.speed;
     if (arriving_time > current.start_time)
@@ -91,6 +90,27 @@ std::optional<double> Data::MoveBetweenOrders(const Order& previous, const Order
 
     cost -= (current.start_time - arriving_time) * params.wait_cost / 60; // waiting time
     return cost;
+}
+
+std::optional<double> Data::MoveBetweenOrders(const Order& previous, const Order& current) const {
+    if (auto raw_cost = CostMovingBetweenOrders(previous, current)) {
+        return {raw_cost.value() + GetRealOrderRevenue(current)};
+    } else {
+        return std::nullopt;
+    }
+}
+
+std::optional<double> Data::MoveBetweenOrders(const Truck& truck, const Order& previous, const Order& current) const {
+    if (!IsExecutableBy(
+        truck.mask_load_type, 
+        truck.mask_trailer_type, 
+        current.mask_load_type, 
+        current.mask_trailer_type)
+    ) {  // bad trailer or load type
+        return std::nullopt;
+    }
+    
+    return MoveBetweenOrders(previous, current);
 }
 
 double Data::GetRealOrderRevenue(const Order& order) const {
@@ -109,8 +129,8 @@ double Data::GetRealOrderRevenue(size_t ind) const {
 
 double Data::GetFreeMovementCost(double distance) const {
     double cost = 0.;
-    cost += distance * params.free_km_cost;
-    cost += (distance / params.speed) * params.free_hour_cost;
+    cost += distance * params.free_km_cost;                     // cost of km
+    cost += (distance / params.speed) * params.free_hour_cost;  // cost of time
     return cost;
 }
 

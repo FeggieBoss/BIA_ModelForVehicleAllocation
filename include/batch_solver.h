@@ -3,6 +3,8 @@
 
 #include "weighted_cities_solver.h"
 
+#include <set>
+
 class BatchSolver {
 public:
     BatchSolver();

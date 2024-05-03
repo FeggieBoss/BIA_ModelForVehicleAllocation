@@ -6,6 +6,8 @@
 #include "solution.h"
 #include "data.h"
 
+#include <unordered_set>
+
 namespace std {
     namespace
     {
@@ -55,6 +57,44 @@ namespace std {
 
     };
 }
+
+// weights of cities
+typedef std::map<unsigned int, double> weights_vector_t;
+/*
+    Provides weights for all cities parameterized by {truck_pos, order_pos}
+    It says how much weight city will have for truck with 'truck_pos'
+    if this truck will go in this city right after making its final order with 'order_pos' 
+*/
+class FreeMovementWeightsVectors {
+private:
+    std::map<std::pair<size_t, size_t>, weights_vector_t> edges_w_vecs_;
+public:
+    FreeMovementWeightsVectors();
+    FreeMovementWeightsVectors(const FreeMovementWeightsVectors& other);
+    const FreeMovementWeightsVectors& operator=(const FreeMovementWeightsVectors& other);
+
+    std::map<std::pair<size_t, size_t>, weights_vector_t>::const_iterator begin() const {  // NOLINT
+        return edges_w_vecs_.begin();
+    }
+
+    std::map<std::pair<size_t, size_t>, weights_vector_t>::const_iterator end() const {  // NOLINT
+        return edges_w_vecs_.end();
+    }
+
+    /*
+        Generate free-movement orders based on weights vectors
+        Also provides mapping from free-movement edge to its position in orders set:
+        {truck_pos, order_pos, city_id} -> free_movement_order_pos
+    */
+    std::pair<Orders, std::unordered_map<std::tuple<size_t, size_t, unsigned int>, size_t>> GetFreeMovementEdges(const Data& data) const;
+    
+    bool IsInitialized() const;
+    std::optional<double> GetWeight(size_t truck_pos, size_t order_pos, unsigned int city_id) const;
+    std::optional<std::reference_wrapper<weights_vector_t>> GetWeightsVector(size_t truck_pos, size_t order_pos);
+    std::optional<std::reference_wrapper<const weights_vector_t>> GetWeightsVectorConst(size_t truck_pos, size_t order_pos) const;
+    void AddWeight(size_t truck_pos, size_t order_pos, unsigned int city_id, double weight);
+    void Reset();
+};
 
 // {truck_pos, from_order_pos, to_order_pos}
 typedef std::tuple<size_t, size_t, size_t> variable_t;

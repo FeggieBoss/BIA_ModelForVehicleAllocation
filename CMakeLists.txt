@@ -28,6 +28,7 @@ set(sources
     src/weighted_cities_solver.cpp
     src/batch_solver.cpp
     src/pre_solver.cpp
+    src/chain_generator.cpp
 )
 add_executable(main
     src/main.cpp

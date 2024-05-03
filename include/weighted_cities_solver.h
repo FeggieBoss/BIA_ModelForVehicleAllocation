@@ -3,31 +3,6 @@
 
 #include "honest_solver.h"
 
-#include <set>
-#include <unordered_set>
-
-/*
-    Provides weights for all cities parameterized by {truck_pos, order_pos}
-    It says how much weight city will have for truck with 'truck_pos'
-    if this truck will go in this city right after making its final order with 'order_pos' 
-*/
-typedef std::map<std::pair<size_t, size_t>, double> weights_vector_t;
-class FreeMovementWeightsVectors {
-private:
-    std::vector<weights_vector_t> edges_w_vecs_;
-public:
-    FreeMovementWeightsVectors();
-    FreeMovementWeightsVectors(size_t cities_count);
-    FreeMovementWeightsVectors(const FreeMovementWeightsVectors& other);
-    const FreeMovementWeightsVectors& operator=(const FreeMovementWeightsVectors& other);
-    
-    bool IsInitialized() const;
-    std::optional<double> GetWeight(unsigned int city_id, size_t truck_pos, size_t order_pos) const;
-    const weights_vector_t& GetWeightsVector(unsigned int city_id) const;
-    void AddWeight(unsigned int city_id, size_t truck_pos, size_t order_pos, double weight);
-    void Reset();
-};
-
 /*
     !!!Note!!!: parents method "solution_t Solve()" will produce unexpected solution
     Solution will be generated according to modified Data (Data after ModifyData method)
@@ -49,7 +24,7 @@ private:
     // if truck choose to move without order to another city we set limit of time he has to do so
     std::optional<unsigned int> time_boundary_ = std::nullopt;
     // weights of last cities in trucks schedules
-    FreeMovementWeightsVectors cities_ws_;
+    FreeMovementWeightsVectors edges_w_vecs_;
 
     // Adding new free-movement edges according to FreeMovementWeightsVectors
     void ModifyData(Data& data) const;
@@ -73,7 +48,7 @@ public:
         (1) ModifyData being called
         (2) we expect for all orders that order.start_time < time_boundary
     */
-    void SetData(const Data& data, unsigned int time_boundary, const FreeMovementWeightsVectors& edges_ws);
+    void SetData(const Data& data, unsigned int time_boundary, const FreeMovementWeightsVectors& edges_w_vecs);
     
     HighsModel CreateModel() override;
 };

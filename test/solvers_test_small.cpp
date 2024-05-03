@@ -2,6 +2,7 @@
 
 #include "checker.h"
 #include "batch_solver.h"
+#include "chain_generator.h"
 
 class SmallDataTest : public testing::Test {
 private:
@@ -129,31 +130,31 @@ TEST_F(SmallDataTest, WeightedSolverTestBasic) {
     EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData";
 }
 
-// cities_ws = 0, time_boundary = 0 => nothing change
+// edges_w_vecs = 0, time_boundary = 0 => nothing change
 TEST_F(SmallDataTest, WeightedSolverTestTimeBoundary1) {
-    FreeMovementWeightsVectors cities_ws;
+    FreeMovementWeightsVectors edges_w_vecs;
     unsigned int time_boundary = 0;
 
     WeightedCitiesSolver solver;
-    solver.SetData(data_, time_boundary, cities_ws);
+    solver.SetData(data_, time_boundary, edges_w_vecs);
     solution_t solution = solver.Solve();
 
-    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData (cities_ws = 0, time_boundary = 0 => suppose to change nothing)";
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData (edges_w_vecs = 0, time_boundary = 0 => suppose to change nothing)";
 }
 
-// cities_ws = 0, time_boundary is big => nothing change
+// edges_w_vecs = 0, time_boundary is big => nothing change
 TEST_F(SmallDataTest, WeightedSolverTestTimeBoundary2) {
-    FreeMovementWeightsVectors cities_ws;
+    FreeMovementWeightsVectors edges_w_vecs;
     unsigned int time_boundary = 1000;
 
     WeightedCitiesSolver solver;
-    solver.SetData(data_, time_boundary, cities_ws);
+    solver.SetData(data_, time_boundary, edges_w_vecs);
     solution_t solution = solver.Solve();
 
-    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData (cities_ws = 0, time_boundary is big => suppose to change nothing)";
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData (edges_w_vecs = 0, time_boundary is big => suppose to change nothing)";
 }
 
-// cities_ws non zero, time_boundary is big
+// edges_w_vecs non zero, time_boundary is big
 TEST_F(SmallDataTest, WeightedSolverTestCitiesWs) {
     const Trucks& trucks = data_.trucks;
     const Orders& orders = data_.orders;
@@ -162,54 +163,45 @@ TEST_F(SmallDataTest, WeightedSolverTestCitiesWs) {
     const auto& expected0 = expected_.orders_by_truck_pos[0];
     const auto& expected1 = expected_.orders_by_truck_pos[1];
 
-    FreeMovementWeightsVectors cities_ws(cities_count);
+    FreeMovementWeightsVectors edges_w_vecs;
     unsigned int time_boundary = 1000;
     
     /*
         we want to add weight for first truck and his last order in ideal solution (lets call it just "last") for each city
-        <=> cities_ws.AddWeight(city_id=..., truck_pos=1, order_pos=last_pos, weight=...)
-        <=> forcing truck to move in this city after completing last (why? - look below)
-        
-        params.wait_cost = 60 => 1min = 1$
-        params.free_km_cost = 1, params.free_hour_cost = 0, params.speed = 60 => 1km = 1$ and we spend 1min moving 1km => 1min = 1$ of free-ride
-        So its same amount of money either to just wait T minutes, or spend T minutes freely riding between cities
-        => if we have additional moneys for finishing in city and have unlimited time_boundary to move there its always better to move there
+        <=> edges_w_vecs.AddWeight(truck_pos=1, order_pos=last_pos, city_id=..., weight=...)
+        <=> forcing truck to move in this city after completing last
+        (if we are already in this city WeightedSolver will generate loop with positive weight - still must take it)
     */
     size_t last_pos = expected0.back();
     size_t truck1_pos = 0;
     unsigned int last_city = orders.GetOrderConst(last_pos).to_city;
     for (unsigned int city = 1; city <= cities_count; ++city) {
         // any non zero weight suppose to force truck going there
-        cities_ws.AddWeight(city, truck1_pos, last_pos, 1.); 
+        edges_w_vecs.AddWeight(truck1_pos, last_pos, city, 1.); 
 
         // setting up solver
         WeightedCitiesSolver solver;
-        solver.SetData(data_, time_boundary, cities_ws);
+        solver.SetData(data_, time_boundary, edges_w_vecs);
         solution_t solution = solver.Solve();
         
         const auto& solution0 = solution.orders_by_truck_pos[0];
         const auto& solution1 = solution.orders_by_truck_pos[1];
 
-        // checking if we are already in city we want to force truck going
-        if (city == last_city) {
-            EXPECT_EQ(expected0, solution0) << "Suppose to be ideal solution for SmallData and truck_id = 1 (we add weight in same city this truck will end his scheduling plan => suppose to change nothing)";
-        } else {
-            // checking valid prefix of real orders
-            ASSERT_EQ(expected0.size() + 1, solution0.size());
-            for (size_t i = 0; i < expected0.size(); ++i) {
-                EXPECT_EQ(expected0[i], solution0[i]);
-            }
-
-            // checking free-movement order in the back to our city
-            const Data& modified_data = solver.GetDataConst();
-            const Order& free_movement = modified_data.orders.GetOrderConst(solution0.back());
-            EXPECT_EQ(city, free_movement.to_city);
+        // checking valid prefix of real orders
+        ASSERT_EQ(expected0.size() + 1, solution0.size());
+        for (size_t i = 0; i < expected0.size(); ++i) {
+            EXPECT_EQ(expected0[i], solution0[i]);
         }
+
+        // checking free-movement order in the back to our city
+        const Data& modified_data = solver.GetDataConst();
+        const Order& free_movement = modified_data.orders.GetOrderConst(solution0.back());
+        EXPECT_EQ(city, free_movement.to_city);
 
         // other truck still suppose to complete 3rd order and just wait till time_boundary
         EXPECT_EQ(expected1, solution1) << "Suppose to be ideal solution for SmallData and truck_id = 2 (we dont add any weight vectors for truck_id = 2 => suppose to change nothing)";
 
-        cities_ws.Reset();
+        edges_w_vecs.Reset();
     }
 }
 
@@ -245,4 +237,101 @@ TEST_F(SmallDataTest, CheckerTest) {
     auto revenue_raw = checker.Check();
     ASSERT_TRUE(revenue_raw.has_value());
     EXPECT_DOUBLE_EQ(10., revenue_raw.value());
+}
+
+TEST_F(SmallDataTest, ChainGeneratorNoWeightsEdgesTest) {
+    ChainGenerator chain_generator(0.f, data_);
+    
+    const auto& chains0 = chain_generator.chains_by_truck_pos[0];
+
+    std::vector<std::vector<size_t>> expected0{
+        {0},
+        {3},
+        {0, 1},
+        {0, 3},
+        {0, 1, 2},
+        {0, 1, 3}
+    };
+    ASSERT_EQ(expected0.size(), chains0.size());
+    for (size_t i = 0; i < expected0.size(); ++i) {
+        for (size_t j = 0; j < expected0[i].size(); ++j) {
+            EXPECT_EQ(expected0[i][j], chains0[i].chain[j]);
+        }
+    }
+    
+    const auto& chains1 = chain_generator.chains_by_truck_pos[1];
+    ASSERT_EQ(1, chains1.size());
+    // {2}
+    EXPECT_EQ(2, chains1[0].Back());
+}
+
+TEST_F(SmallDataTest, ChainGeneratorSingleFreeMovementEdgeTest) {
+    ChainGenerator old_chain_generator(0.f, data_);
+
+    for (size_t truck_pos = 0; truck_pos < data_.trucks.Size(); ++truck_pos) {
+        const std::vector<Chain>& old_chains = old_chain_generator.chains_by_truck_pos[truck_pos];
+
+        for (size_t chain_pos = 0; chain_pos < old_chains.size(); ++chain_pos) {
+            const Chain& old_chain = old_chains[chain_pos];
+            size_t old_chain_len = old_chain.GetEndPos();
+            size_t last_order_pos = old_chain.chain[old_chain_len - 1];
+            
+            // adding edge that suppose to grow current chain
+            FreeMovementWeightsVectors edges_w_vecs;
+            unsigned city_id = 1;
+            edges_w_vecs.AddWeight(truck_pos, last_order_pos, city_id, 1.);
+
+            ChainGenerator chain_generator(0.f, data_);
+            Orders free_movement_edges;
+            chain_generator.AddWeightsEdges(free_movement_edges, edges_w_vecs);
+            // checking that it produced exactly one free movement edge
+            ASSERT_EQ(1, free_movement_edges.Size());
+
+            const Order& last_order = data_.orders.GetOrderConst(last_order_pos);
+            const Order& free_movement_order = free_movement_edges.GetOrderConst(0);
+            EXPECT_EQ(last_order.to_city, free_movement_order.from_city);
+            EXPECT_EQ(last_order.finish_time, free_movement_order.start_time);
+            EXPECT_EQ(city_id, free_movement_order.to_city);
+            
+            const std::vector<Chain>& new_chains = chain_generator.chains_by_truck_pos[truck_pos];
+            ASSERT_EQ(old_chains.size(), new_chains.size());
+            /*
+                !!!NOTE!!!
+                we are using here that chain generator saving relative order of chains 
+            */
+            const Chain& new_chain = new_chains[chain_pos];
+            // checking that chain got bigger
+            ASSERT_EQ(old_chain_len + 1, new_chain.GetEndPos());
+            // checking its last order is exactly new free-movement edge
+            EXPECT_EQ(data_.orders.Size(), new_chain.Back());
+        }
+    }
+}
+
+TEST_F(SmallDataTest, ChainGeneratorTest) {
+    ChainGenerator chain_generator(0.f, data_);
+
+    const size_t truck_pos = 1;
+    const size_t order_pos = 2; 
+    const auto& chains1 = chain_generator.chains_by_truck_pos[truck_pos];
+    ASSERT_EQ(1, chains1.size());
+    EXPECT_EQ(order_pos, chains1[0].Back());
+
+
+    FreeMovementWeightsVectors edges_w_vecs;
+    for (unsigned int city_id = 1; city_id <= data_.cities_count; ++city_id) {
+        edges_w_vecs.AddWeight(truck_pos, order_pos, city_id, 1.);
+    }
+
+    chain_generator.AddWeightsEdges(data_.orders, edges_w_vecs);
+
+    std::set<unsigned int> cities;
+    for (const Chain& chain : chain_generator.chains_by_truck_pos[truck_pos]) {
+        cities.emplace(data_.orders.GetOrderConst(chain.Back()).to_city);
+    }
+
+    unsigned int cur = 1;
+    for (unsigned int city_id : cities) {
+        EXPECT_EQ(city_id, cur++);
+    }
 }

@@ -89,12 +89,9 @@ std::optional<double> Checker::Check() {
 
             double revenue = 0.;
             {
-                auto cost = data_.MoveBetweenOrders(previous, current);
+                auto cost = data_.MoveBetweenOrders(truck, previous, current);
                 assert(cost.has_value());
                 revenue += cost.value();
-            }
-            {
-                revenue += data_.GetRealOrderRevenue(scheduled_orders[order_pos]);
             }
 
             #ifdef DEBUG_MODE

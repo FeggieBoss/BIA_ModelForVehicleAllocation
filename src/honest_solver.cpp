@@ -72,16 +72,9 @@ HighsModel HonestSolver::CreateModel() {
                 int u = 1; 
                 if (from_order_pos == to_order_pos) { // cant pick same order twice
                     u = 0;
-                } else if (!IsExecutableBy(
-                    truck.mask_load_type, 
-                    truck.mask_trailer_type, 
-                    to_order.mask_load_type, 
-                    to_order.mask_trailer_type)
-                ) { // bad trailer or load type
-                    u = 0; 
                 } else {
-                    auto cost = Solver::data_.MoveBetweenOrders(from_order, to_order);
-                    u &= cost.has_value(); // possible to arrive to k-th after j-th
+                    auto cost = Solver::data_.MoveBetweenOrders(truck, from_order, to_order);
+                    u &= cost.has_value(); // possible to arrive to k-th after j-th + k-th order is executable by i-th truck
 
                     // its not necessary for correctness to check if j-th order can be picked by i-th truck (it will be checked later anyway)
                     // but it will reduce amount of variables
@@ -108,17 +101,8 @@ HighsModel HonestSolver::CreateModel() {
 
             // we suppose to let any truck pick fake first order so we wont check any conditions for this order
             // but we have to check conditions for i-th truck and k-th order because it will be his real first order 
-            if (!IsExecutableBy(
-                truck.mask_load_type, 
-                truck.mask_trailer_type, 
-                to_order.mask_load_type, 
-                to_order.mask_trailer_type)
-            ) { // bad trailer or load type
-                u = 0; 
-            } else {
-                auto cost = Solver::data_.MoveBetweenOrders(from_order, to_order);
-                u &= cost.has_value(); // possible to complete j-th order as first one
-            }
+            auto cost = Solver::data_.MoveBetweenOrders(truck, from_order, to_order);
+            u &= cost.has_value();
 
             if (u != 0) {
                 variables.push_back({truck_pos, Solver::ffo_pos, to_order_pos});
@@ -237,7 +221,7 @@ HighsModel HonestSolver::CreateModel() {
         const Order& to_order   = (to_order_pos != Solver::flo_pos  ? orders.GetOrderConst(to_order_pos) : Solver::make_flo(from_order));
 
         // cost of moving to to_order.from_city and waiting until we can start it
-        c += Solver::data_.MoveBetweenOrders(from_order, to_order).value();
+        c += Solver::data_.CostMovingBetweenOrders(from_order, to_order).value();
 
         model.lp_.col_cost_[ind] = c;
     }

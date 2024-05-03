@@ -29,8 +29,8 @@ void GetBatch(
     }
 }
 
-static void GetCitiesWightsVector(
-    FreeMovementWeightsVectors& cities_ws,
+static void UpdateFreeMovementWeightsVectors(
+    FreeMovementWeightsVectors& edges_w_vecs,
     const Data& batch_data,
     unsigned int time_bound,
     unsigned int time_window,
@@ -38,13 +38,36 @@ static void GetCitiesWightsVector(
 ) {
     static constexpr double eps = 1e-6;
 
-    cities_ws.Reset();
+    edges_w_vecs.Reset();
 
     const Trucks& batch_trucks = batch_data.trucks;
     const Orders& batch_orders = batch_data.orders;
 
     const size_t batch_trucks_count = batch_trucks.Size();
     const size_t batch_orders_count = batch_orders.Size();
+
+    static auto update_edges_w_vecs = [](
+        FreeMovementWeightsVectors& edges_w_vecs,
+        const Data& batch_data,
+        const Truck& truck,
+        const Order& from_order,
+        const Order& to_order,
+        size_t truck_pos,
+        size_t order_pos)
+    {
+        unsigned int to_city = to_order.from_city;
+
+        if (auto raw_bonus = batch_data.MoveBetweenOrders(truck, from_order, to_order)) {
+            double bonus = raw_bonus.value();
+            if (to_order.obligation) {
+                // TO DO
+                bonus = std::max(bonus, 2*eps);
+            }
+            if (bonus >= eps) {
+                edges_w_vecs.AddWeight(truck_pos, order_pos, to_city, bonus);
+            }
+        }
+    };
 
     /*
         Each truck will either
@@ -58,74 +81,48 @@ static void GetCitiesWightsVector(
         (1) because each truck has its own last order by same reasons and we will add edges for this order
         (2) we will add multiple edges for some cities which is init_city for more than one truck
     */
-    for (const auto& [_, future_order] : suf_orders) {
-        if (future_order.start_time >= time_bound + time_window) {
-            break;
-        }
-        unsigned int to_city = future_order.from_city;
+    for (size_t truck_pos = 0; truck_pos < batch_trucks_count; ++truck_pos) {
+        const Truck& truck = batch_trucks.GetTruckConst(truck_pos);
 
-        for (size_t truck_pos = 0; truck_pos < batch_trucks_count; ++truck_pos) {
-            const Truck& truck = batch_trucks.GetTruckConst(truck_pos);
+        for (size_t order_pos = 0; order_pos < batch_orders_count; ++order_pos) {
+            const Order& last_order = batch_orders.GetOrderConst(order_pos);
 
-            if (!IsExecutableBy(
+            // there is no point in free-movement edges when last order finishes after next batch will start
+            if (last_order.finish_time >= time_bound) {
+                continue;
+            } else if (!IsExecutableBy(
                 truck.mask_load_type, 
                 truck.mask_trailer_type, 
-                future_order.mask_load_type, 
-                future_order.mask_trailer_type)
+                last_order.mask_load_type, 
+                last_order.mask_trailer_type)
             ) { // bad trailer or load type
                 continue;
             }
 
-            auto update_cities_ws = [&future_order, &truck, &cities_ws, &batch_data, to_city](
-                unsigned int from_city, 
-                unsigned int start_time, 
-                size_t truck_pos,
-                size_t order_pos) 
-            {
-                auto distance = batch_data.dists.GetDistance(from_city, to_city);
-                if (!distance.has_value()) {
-                    // there is no road between this two cities
-                    return;
+            for (const auto& [_, future_order] : suf_orders) {
+                /*
+                    we need only orders that belong to next batch
+                    Note: working fast because we are using break here(orders are sorted by start_time)
+                */
+                if (future_order.start_time >= time_bound + time_window) {
+                    break;
                 }
-                double d = distance.value();
-                
-                unsigned int finish_time = start_time + (d * 60. / batch_data.params.speed);
-                if (finish_time > future_order.start_time) {
-                    // no way to get there in time
-                    return;
-                }
-
-                double revenue = batch_data.GetRealOrderRevenue(future_order);
-                double free_movement_cost = batch_data.GetFreeMovementCost(d);
-                double waiting_cost = batch_data.GetWaitingCost(future_order.start_time - finish_time);
-
-                if (revenue >= free_movement_cost + waiting_cost + eps || future_order.obligation) {
-                    // we aint taking in account movement cost because our model will do it by itself later
-                    revenue -= waiting_cost;
-                    cities_ws.AddWeight(to_city, truck_pos, order_pos, revenue);
-                }
-            };
-
-            // processing all real last_orders
-            for (size_t order_pos = 0; order_pos < batch_orders_count; ++order_pos) {
-                const Order& last_order = batch_orders.GetOrderConst(order_pos);
-
-                if (last_order.finish_time >= time_bound) {
-                    continue;
-                } else if (!IsExecutableBy(
-                    truck.mask_load_type, 
-                    truck.mask_trailer_type, 
-                    last_order.mask_load_type, 
-                    last_order.mask_trailer_type)
-                ) { // bad trailer or load type
-                    continue;
-                }
-                update_cities_ws(last_order.to_city, last_order.finish_time, truck_pos, order_pos);
+                update_edges_w_vecs(edges_w_vecs, batch_data, truck, last_order, future_order, truck_pos, order_pos);
             }
+        }
 
+        for (const auto& [_, future_order] : suf_orders) {
+            /*
+                we need only orders that belong to next batch
+                Note: working fast because we are using break here(orders are sorted by start_time)
+            */
+            if (future_order.start_time >= time_bound + time_window) {
+                break;
+            }
             // processing our last order is ffo <=> we wont make any orders on current batch at all
             {
-                update_cities_ws(truck.init_city, truck.init_time, truck_pos, Solver::ffo_pos);
+                const Order& ffo = Solver::make_ffo(truck);
+                update_edges_w_vecs(edges_w_vecs, batch_data, truck, ffo, future_order, truck_pos, Solver::ffo_pos);
             }
         }
     }
@@ -189,7 +186,7 @@ solution_t BatchSolver::Solve(const Data& data, unsigned int time_window) {
     std::vector<Truck> batch_trucks;
     std::vector<Order> batch_orders;
 
-    FreeMovementWeightsVectors cities_ws(data.cities_count);
+    FreeMovementWeightsVectors edges_w_vecs;
     WeightedCitiesSolver solver;
     for(unsigned int cur_time_window = time_window;; cur_time_window += time_window) {
         // check if we processed all orders
@@ -231,8 +228,8 @@ solution_t BatchSolver::Solve(const Data& data, unsigned int time_window) {
         #endif   
         
         // Solving problem with current batches
-        GetCitiesWightsVector(cities_ws, batch_data, cur_time_window, time_window, order_by_start_time);
-        solver.SetData(batch_data, cur_time_window, cities_ws);
+        UpdateFreeMovementWeightsVectors(edges_w_vecs, batch_data, cur_time_window, time_window, order_by_start_time);
+        solver.SetData(batch_data, cur_time_window, edges_w_vecs);
         solution_t batch_solution = solver.Solve();
 
         // We want to work with free-movement orders (read Note in weighted_cities_solver.h)
