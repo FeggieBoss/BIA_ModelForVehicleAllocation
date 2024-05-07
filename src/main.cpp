@@ -1,7 +1,7 @@
 #include "main.h"
 
 #include "checker.h"
-#include "honest_solver.h"
+#include "flow_solver.h"
 #include "weighted_cities_solver.h"
 #include "batch_solver.h"
 
@@ -55,16 +55,16 @@ int main() {
     constexpr unsigned int time_window = 1*24*60;
 
     std::vector<Truck> trucks;
-    filter_trucks(100, 200*time_window, trucks, data);
+    filter_trucks(1500, 200*time_window, trucks, data);
 
     std::vector<Order> orders;
-    filter_orders(20000, 400*time_window, orders, data);
+    filter_orders(50000, 400*time_window, orders, data);
     
     data.trucks = trucks;
     data.orders = orders;
 
-    std::cout << trucks.size() << std::endl;
-    std::cout << orders.size() << std::endl;
+    std::cout << data.trucks.Size() << std::endl;
+    std::cout << data.orders.Size() << std::endl;
 
     // data.params.DebugPrint();
     // data.trucks.DebugPrint();
@@ -75,8 +75,12 @@ int main() {
         order.obligation = 0;
     }
 
-    BatchSolver solver;
-    solution_t solution = solver.Solve(data, time_window);
+    // std::shared_ptr<WeightedCitiesSolver> solver = std::make_shared<WeightedCitiesSolver>();
+    // BatchSolver batch_solver(std::move(solver));
+
+    std::shared_ptr<ChainSolver> solver = std::make_shared<ChainSolver>(0.f, 2);
+    BatchSolver batch_solver(std::move(solver));
+    solution_t solution = batch_solver.Solve(data, time_window);
 
 
     Checker checker(data);

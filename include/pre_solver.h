@@ -3,6 +3,13 @@
 
 #include "solver.h"
 
+#include <tuple>
+#include <cstddef>
+#include <vector>
+
+// {truck_pos, from_order_pos, to_order_pos}
+typedef std::tuple<size_t, size_t, size_t> variable_t;
+
 struct PreSolverNode {
     size_t to;
     size_t var_index;

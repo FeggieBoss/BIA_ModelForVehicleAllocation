@@ -76,10 +76,11 @@ public:
     // void TearDown() override {}
 };
 
-TEST_F(TrickyDataTest, HonestSolverTestBasic) {
-    HonestSolver solver;
+TEST_F(TrickyDataTest, FlowSolverTestBasic) {
+    FlowSolver solver;
     solver.SetData(data_);
-    solution_t solution = solver.Solve();
+    auto model = solver.CreateModel();
+    solution_t solution = solver.Solve(model);
 
     EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for TrickyData)";
 }
@@ -116,19 +117,39 @@ TEST_F(TrickyDataTest, WeightedSolverTestTimeBoundary2) {
     EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for TrickyData (cities_ws = 0, time_boundary is big => suppose to change nothing)";
 }
 
-TEST_F(TrickyDataTest, BatchSolverTestOneBatch) {
-    BatchSolver solver;
+TEST_F(TrickyDataTest, BatchSolverFlowTestOneBatch) {
+    std::shared_ptr<WeightedCitiesSolver> solver = std::make_shared<WeightedCitiesSolver>();
+    BatchSolver batch_solver(std::move(solver));
 
     // big time bound
-    solution_t solution = solver.Solve(data_, 1000);
+    solution_t solution = batch_solver.Solve(data_, 1000);
     EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for TrickyData";
 
     // time bound = max(for order in orders {order.finish_time})
-    solution = solver.Solve(data_, 210);
+    solution = batch_solver.Solve(data_, 210);
     EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for TrickyData";
 
     // time bound = max(for order in orders {order.start_time}) + 1
-    solution = solver.Solve(data_, 201);
+    solution = batch_solver.Solve(data_, 201);
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for TrickyData (time bound = max(for order in orders {order.start_time}) + 1 still suppose to produce only one batch)";
+}
+
+TEST_F(TrickyDataTest, BatchSolverAssignmentTestOneBatch) {
+    std::shared_ptr<ChainSolver> solver = std::make_shared<ChainSolver>(-1e9, 5);
+    ASSERT_EQ(5, expected_.orders_by_truck_pos[0].size());
+
+    BatchSolver batch_solver(std::move(solver));
+
+    // big time bound
+    solution_t solution = batch_solver.Solve(data_, 1000);
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for TrickyData";
+
+    // time bound = max(for order in orders {order.finish_time})
+    solution = batch_solver.Solve(data_, 210);
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for TrickyData";
+
+    // time bound = max(for order in orders {order.start_time}) + 1
+    solution = batch_solver.Solve(data_, 201);
     EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for TrickyData (time bound = max(for order in orders {order.start_time}) + 1 still suppose to produce only one batch)";
 }
 

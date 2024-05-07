@@ -1,7 +1,7 @@
 #ifndef DEFINE_WEIGHTED_CITIES_SOLVER_H
 #define DEFINE_WEIGHTED_CITIES_SOLVER_H
 
-#include "honest_solver.h"
+#include "flow_solver.h"
 
 /*
     !!!Note!!!: parents method "solution_t Solve()" will produce unexpected solution
@@ -21,17 +21,20 @@
 */
 class WeightedCitiesSolver : public Solver {
 private:
+    Data data_;
+
     // if truck choose to move without order to another city we set limit of time he has to do so
     std::optional<unsigned int> time_boundary_ = std::nullopt;
     // weights of last cities in trucks schedules
     FreeMovementWeightsVectors edges_w_vecs_;
+    FlowSolver flow_solver;
 
     // Adding new free-movement edges according to FreeMovementWeightsVectors
     void ModifyData(Data& data) const;
 public:
     WeightedCitiesSolver();
     
-    const Data& GetDataConst() const;
+    const Data& GetDataConst() const override;
 
     /*
         No time boundary means no fine for waiting after completing last order
@@ -51,6 +54,7 @@ public:
     void SetData(const Data& data, unsigned int time_boundary, const FreeMovementWeightsVectors& edges_w_vecs);
     
     HighsModel CreateModel() override;
+    solution_t Solve() override;
 };
 
 #endif // DEFINE_WEIGHTED_CITIES_SOLVER_H

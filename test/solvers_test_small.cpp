@@ -2,7 +2,7 @@
 
 #include "checker.h"
 #include "batch_solver.h"
-#include "chain_generator.h"
+#include "chain_solver.h"
 
 class SmallDataTest : public testing::Test {
 private:
@@ -108,18 +108,19 @@ public:
     // void TearDown() override {}
 };
 
-TEST_F(SmallDataTest, HonestSolverTestBasic) {
-    HonestSolver solver;
+TEST_F(SmallDataTest, FlowSolverTestBasic) {
+    FlowSolver solver;
     solver.SetData(data_);
+    auto model = solver.CreateModel();
 
     // data_.params.DebugPrint();
     // data_.trucks.DebugPrint();
     // data_.orders.DebugPrint();
     // data_.dists.DebugPrint();
 
-    solution_t solution = solver.Solve();
+    solution_t solution = solver.Solve(model);
 
-    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData)";
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData";
 }
 
 TEST_F(SmallDataTest, WeightedSolverTestBasic) {
@@ -205,31 +206,6 @@ TEST_F(SmallDataTest, WeightedSolverTestCitiesWs) {
     }
 }
 
-TEST_F(SmallDataTest, BatchSolverTestOneBatch) {
-    BatchSolver solver;
-
-    // big time bound
-    solution_t solution = solver.Solve(data_, 1000);
-    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData";
-
-    // time bound = max(for order in orders {order.finish_time})
-    solution = solver.Solve(data_, 300);
-    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData";
-
-    // time bound = max(for order in orders {order.start_time}) + 1
-    solution = solver.Solve(data_, 121);
-    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData (time bound = max(for order in orders {order.start_time}) + 1 still suppose to produce only one batch)";
-}
-
-TEST_F(SmallDataTest, BatchSolverTest) {
-    BatchSolver solver;
-
-    for (unsigned int time_bound = 5; time_bound <= 300; time_bound += 5) {
-        solution_t solution = solver.Solve(data_, time_bound);
-        EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData and time_bound = " << time_bound;
-    }
-}
-
 TEST_F(SmallDataTest, CheckerTest) {
     Checker checker(data_);
     checker.SetSolution(expected_);
@@ -239,9 +215,10 @@ TEST_F(SmallDataTest, CheckerTest) {
     EXPECT_DOUBLE_EQ(10., revenue_raw.value());
 }
 
-TEST_F(SmallDataTest, ChainGeneratorNoWeightsEdgesTest) {
-    ChainGenerator chain_generator(0.f, data_);
-    
+TEST_F(SmallDataTest, ChainGeneratorNoFreeMovementEdgesTest) {
+    ChainGenerator chain_generator(0.f, 4);
+    chain_generator.GenerateChains(data_);
+
     const auto& chains0 = chain_generator.chains_by_truck_pos[0];
 
     std::vector<std::vector<size_t>> expected0{
@@ -266,7 +243,10 @@ TEST_F(SmallDataTest, ChainGeneratorNoWeightsEdgesTest) {
 }
 
 TEST_F(SmallDataTest, ChainGeneratorSingleFreeMovementEdgeTest) {
-    ChainGenerator old_chain_generator(0.f, data_);
+    ChainGenerator old_chain_generator(0.f, 4);
+    old_chain_generator.GenerateChains(data_);
+
+    size_t old_orders_count = data_.orders.Size();
 
     for (size_t truck_pos = 0; truck_pos < data_.trucks.Size(); ++truck_pos) {
         const std::vector<Chain>& old_chains = old_chain_generator.chains_by_truck_pos[truck_pos];
@@ -281,35 +261,37 @@ TEST_F(SmallDataTest, ChainGeneratorSingleFreeMovementEdgeTest) {
             unsigned city_id = 1;
             edges_w_vecs.AddWeight(truck_pos, last_order_pos, city_id, 1.);
 
-            ChainGenerator chain_generator(0.f, data_);
-            Orders free_movement_edges;
-            chain_generator.AddWeightsEdges(free_movement_edges, edges_w_vecs);
-            // checking that it produced exactly one free movement edge
-            ASSERT_EQ(1, free_movement_edges.Size());
+            ChainGenerator chain_generator(0.f, 4);
+            Data data(data_);
+            chain_generator.GenerateChains(data);
+            chain_generator.AddWeightsEdges(data, edges_w_vecs);
+            // checking that it produced exactly one free-movement edge
+            ASSERT_EQ(old_orders_count + 1, data.orders.Size()) << "Only one free-movement edge supposed to be produced";
 
             const Order& last_order = data_.orders.GetOrderConst(last_order_pos);
-            const Order& free_movement_order = free_movement_edges.GetOrderConst(0);
+            const Order& free_movement_order = data.orders.GetOrderConst(old_orders_count);
             EXPECT_EQ(last_order.to_city, free_movement_order.from_city);
             EXPECT_EQ(last_order.finish_time, free_movement_order.start_time);
             EXPECT_EQ(city_id, free_movement_order.to_city);
             
             const std::vector<Chain>& new_chains = chain_generator.chains_by_truck_pos[truck_pos];
-            ASSERT_EQ(old_chains.size(), new_chains.size());
+            ASSERT_EQ(old_chains.size(), new_chains.size()) << "The number of chains must have remained same";
             /*
                 !!!NOTE!!!
                 we are using here that chain generator saving relative order of chains 
             */
             const Chain& new_chain = new_chains[chain_pos];
             // checking that chain got bigger
-            ASSERT_EQ(old_chain_len + 1, new_chain.GetEndPos());
+            ASSERT_EQ(old_chain_len + 1, new_chain.GetEndPos()) << "Chain must have lengthened";
             // checking its last order is exactly new free-movement edge
-            EXPECT_EQ(data_.orders.Size(), new_chain.Back());
+            EXPECT_EQ(data_.orders.Size(), new_chain.Back()) << "Last order must be exactly new free-movement edge";
         }
     }
 }
 
 TEST_F(SmallDataTest, ChainGeneratorTest) {
-    ChainGenerator chain_generator(0.f, data_);
+    ChainGenerator chain_generator(0.f, 4);
+    chain_generator.GenerateChains(data_);
 
     const size_t truck_pos = 1;
     const size_t order_pos = 2; 
@@ -323,7 +305,7 @@ TEST_F(SmallDataTest, ChainGeneratorTest) {
         edges_w_vecs.AddWeight(truck_pos, order_pos, city_id, 1.);
     }
 
-    chain_generator.AddWeightsEdges(data_.orders, edges_w_vecs);
+    chain_generator.AddWeightsEdges(data_, edges_w_vecs);
 
     std::set<unsigned int> cities;
     for (const Chain& chain : chain_generator.chains_by_truck_pos[truck_pos]) {
@@ -332,6 +314,109 @@ TEST_F(SmallDataTest, ChainGeneratorTest) {
 
     unsigned int cur = 1;
     for (unsigned int city_id : cities) {
-        EXPECT_EQ(city_id, cur++);
+        EXPECT_EQ(city_id, cur++) << "All cities have to be presented";
+    }
+}
+
+TEST_F(SmallDataTest, ChainSolverNoFreeMovementEdgesTest) {
+    ChainSolver solver(-1e9, 4);
+    solver.SetData(data_);
+
+    solution_t solution = solver.Solve();
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData";
+}
+
+TEST_F(SmallDataTest, ChainSolverTest) {
+    /*
+        solution without this free-movement edge {0,1,3} and {2} for truck_pos 0 and 1 respectively
+        lets add free-movement edges for truck_pos = 1 and check that solver used it
+    */
+    size_t truck_pos = 1;
+    for (size_t order_pos = 0; order_pos < data_.orders.Size(); ++order_pos) {
+        unsigned int from_city = data_.orders.GetOrderConst(order_pos).to_city;
+
+        for (unsigned int city_id = 0; city_id < data_.cities_count; ++city_id) {
+            // we have to provide free-movement edges between cities with road between them
+            if (!data_.dists.GetDistance(from_city, city_id).has_value()) {
+                continue;
+            }
+
+            ChainSolver solver(-1e9, 4);
+
+            FreeMovementWeightsVectors edges_w_vecs;
+            edges_w_vecs.AddWeight(truck_pos, order_pos, city_id, 1.);
+
+            solver.SetData(data_, edges_w_vecs);
+
+            solution_t solution = solver.Solve();
+
+            const auto& solution0 = solution.orders_by_truck_pos[0];
+            const auto& solution1 = solution.orders_by_truck_pos[1];
+
+            const auto& expected0 = expected_.orders_by_truck_pos[0];
+            const auto& expected1 = expected_.orders_by_truck_pos[1];
+
+            EXPECT_EQ(expected0, solution0) << "Suppose to be ideal solution for SmallData for truck_pos = 0";
+            if (order_pos == expected1.back()) {
+                ASSERT_EQ(expected1.size() + 1, solution1.size()) << "truck_pos = 1 suppose to use free-movement edge";
+                EXPECT_EQ(data_.orders.Size(), solution1.back());
+            } else {
+                EXPECT_EQ(expected1, solution1) << "Suppose to be ideal solution for SmallData for truck_pos = 1";
+            }
+        }
+    }
+}
+
+TEST_F(SmallDataTest, BatchSolverFlowTestOneBatch) {
+    std::shared_ptr<WeightedCitiesSolver> solver = std::make_shared<WeightedCitiesSolver>();
+    BatchSolver batch_solver(std::move(solver));
+
+    // big time bound
+    solution_t solution = batch_solver.Solve(data_, 1000);
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData";
+
+    // time bound = max(for order in orders {order.finish_time})
+    solution = batch_solver.Solve(data_, 300);
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData";
+
+    // time bound = max(for order in orders {order.start_time}) + 1
+    solution = batch_solver.Solve(data_, 121);
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData (time bound = max(for order in orders {order.start_time}) + 1 still suppose to produce only one batch)";
+}
+
+TEST_F(SmallDataTest, BatchSolverAssignmentTestOneBatch) {
+    std::shared_ptr<ChainSolver> solver = std::make_shared<ChainSolver>(-1e9, 4);
+    BatchSolver batch_solver(std::move(solver));
+
+    // big time bound
+    solution_t solution = batch_solver.Solve(data_, 1000);
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData";
+
+    // time bound = max(for order in orders {order.finish_time})
+    solution = batch_solver.Solve(data_, 300);
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData";
+
+    // time bound = max(for order in orders {order.start_time}) + 1
+    solution = batch_solver.Solve(data_, 121);
+    EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData (time bound = max(for order in orders {order.start_time}) + 1 still suppose to produce only one batch)";
+}
+
+TEST_F(SmallDataTest, BatchSolverFlowTest) {
+    std::shared_ptr<WeightedCitiesSolver> solver = std::make_shared<WeightedCitiesSolver>();
+    BatchSolver batch_solver(std::move(solver));
+
+    for (unsigned int time_bound = 5; time_bound <= 300; time_bound += 5) {
+        solution_t solution = batch_solver.Solve(data_, time_bound);
+        EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData and time_bound = " << time_bound;
+    }
+}
+
+TEST_F(SmallDataTest, BatchSolverAssignmentTest) {
+    std::shared_ptr<ChainSolver> solver = std::make_shared<ChainSolver>(-1e9, 4);
+    BatchSolver batch_solver(std::move(solver));
+
+    for (unsigned int time_bound = 5; time_bound <= 300; time_bound += 5) {
+        solution_t solution = batch_solver.Solve(data_, time_bound);
+        EXPECT_EQ(expected_.orders_by_truck_pos, solution.orders_by_truck_pos) << "Suppose to be ideal solution for SmallData and time_bound = " << time_bound;
     }
 }

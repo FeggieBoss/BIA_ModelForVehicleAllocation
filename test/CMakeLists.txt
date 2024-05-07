@@ -5,6 +5,8 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     remove_definitions(-DDEBUG_MODE)
 endif()
 
+add_definitions(-DTEST_BUILD)
+
 include_directories(../include)
 
 set(test_sources ${sources})

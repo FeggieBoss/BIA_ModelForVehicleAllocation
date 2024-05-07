@@ -96,28 +96,23 @@ public:
     void Reset();
 };
 
-// {truck_pos, from_order_pos, to_order_pos}
-typedef std::tuple<size_t, size_t, size_t> variable_t;
-
 class Solver {
+protected:
+    std::vector<size_t> Solve(HighsModel& model);
+
 public:
+    Solver() = default;
+
     static size_t ffo_pos;
     static size_t flo_pos;
     static std::function<Order(const Truck&)> make_ffo;
     static std::function<Order(const Order&)> make_flo;
-
     static bool IsFakeOrder(size_t order_pos);
-
-    Data data_;
-    // index of variable in vector X -> its 3d/variable_t representation
-    std::unordered_map<size_t, variable_t> to_3d_variables_;
-
-public:
-    Solver() = default;
+    
     virtual void SetData(const Data& data) = 0;
     virtual HighsModel CreateModel() = 0;
-
-    solution_t Solve();
+    virtual solution_t Solve() = 0;
+    virtual const Data& GetDataConst() const = 0;
 };
 
 #endif // DEFINE_SOLVER_H

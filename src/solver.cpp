@@ -205,9 +205,12 @@ bool Solver::IsFakeOrder(size_t order_pos) {
     return (order_pos == ffo_pos || order_pos == flo_pos);
 }
 
-solution_t Solver::Solve() {
-    HighsModel model = CreateModel();
-    
+std::vector<size_t> Solver::Solve(HighsModel& model) {
+    std::cout << "Model(" << model.lp_.num_col_ << ',' << model.lp_.num_row_ << ")\n";
+    if (model.lp_.num_col_ == 0) {
+        return {};
+    }
+
     Highs highs;
     #ifndef DEBUG_MODE
     highs.setOptionValue("output_flag", false);
@@ -245,60 +248,13 @@ solution_t Solver::Solve() {
     
     return_status = highs.run();
     assert(return_status==HighsStatus::kOk);
-    
-    #ifdef DEBUG_MODE
-    cout << "##SOLVER_DEBUG" << endl;
-    cout << "orders_count = " << data_.orders.Size() << endl;
-    #endif
 
-    std::vector<std::vector<size_t>> orders_by_truck_pos(data_.trucks.Size(), std::vector<size_t>());
-    size_t orders_count = data_.orders.Size();
+    std::vector<size_t> setted_columns;
+    setted_columns.reserve(lp.num_col_);
     for (int col = 0; col < lp.num_col_; ++col) {
         if (info.primal_solution_status && solution.col_value[col]) {
-            auto& [i, j, k] = to_3d_variables_[col];
-
-            #ifdef DEBUG_MODE
-            auto i_id = data_.trucks.GetTruckConst(i).truck_id;
-            printf("{%2ld,%2ld,%2ld}", i, j, k);
-            printf(" /// truck_id(%2d)", i_id);
-
-            if (j < orders_count) {
-                auto jth = data_.orders.GetOrderConst(j);
-                printf("\n\t   /// from_order_id(%2d)[from_city(%2d),to_city(%2d)]", jth.order_id, jth.from_city, jth.to_city);
-            } else {
-                std::string name = (j == Solver::ffo_pos ? "ffo" : "flo");
-                printf("\n\t   /// %s", name.c_str());
-            }
-            if (k < orders_count) {
-                auto kth = data_.orders.GetOrderConst(k);
-                printf("\n\t   /// to_order_id(%2d)[from_city(%2d),to_city(%2d)]", kth.order_id, kth.from_city, kth.to_city);
-            } else {
-                std::string name = (k == Solver::ffo_pos ? "ffo" : "flo");
-                printf("\n\t   /// %s", name.c_str());
-            }
-            printf("\n");
-            #endif
-
-            // not adding fake orders in solution
-            if (j < orders_count)
-                orders_by_truck_pos[i].push_back(j);
+            setted_columns.push_back(col);
         }
     }
-
-    size_t trucks_count = data_.trucks.Size();
-    const Orders& orders = data_.orders;
-    for(size_t truck_pos = 0; truck_pos < trucks_count; ++truck_pos) {
-        auto &scheduled_orders = orders_by_truck_pos[truck_pos];
-
-        // organizing scheduled orders in the order they will be completed
-        sort(scheduled_orders.begin(), scheduled_orders.end(), [&orders](const int& a, const int& b) {
-            return orders.GetOrderConst(a).start_time < orders.GetOrderConst(b).start_time;
-        });
-    }
-
-    #ifdef DEBUG_MODE
-    cout << "SOLVER_DEBUG##" << endl;
-    #endif
-
-    return {orders_by_truck_pos};
+    return setted_columns;
 }

@@ -50,10 +50,18 @@ size_t Chain::GetEndPos() const {
     return MX_LEN;
 }
 
-
 size_t Chain::Back() const {
     return chain[GetEndPos() - 1];
 }
+
+size_t Chain::operator[](size_t pos) const {
+    return chain[pos];
+}
+
+size_t& Chain::operator[](size_t pos) {
+    return chain[pos];
+}
+
 
 void Chain::SetRevenue(double _revenue) {
     revenue = _revenue;
@@ -77,20 +85,32 @@ void ChainGenerator::DebugPrint() const {
 }
 #endif
 
-ChainGenerator::ChainGenerator(double min_chain_revenue, const Data& data) : min_chain_revenue_(min_chain_revenue), data_(data) {
-    const Trucks& trucks = data_.trucks;
-
-    size_t trucks_count = trucks.Size();
-    chains_by_truck_pos.resize(trucks_count);
-
-    InitFirstEdge();
-
-    Merge(MX_LEN - 2);
+ChainGenerator::ChainGenerator(double min_chain_revenue, size_t mx_chain_len) :
+    min_chain_revenue_(min_chain_revenue),
+    mx_chain_len_(mx_chain_len)
+{
+    assert(mx_chain_len_ >= 1);
 }
 
-void ChainGenerator::InitFirstEdge() {
-    const Trucks& trucks = data_.trucks;
-    const Orders& orders = data_.orders;
+void ChainGenerator::GenerateChains(const Data& data) {
+    ADD_WEIGHTS_EDGES_CALL_COUNT = 0;
+
+    const Trucks& trucks = data.trucks;
+
+    size_t trucks_count = trucks.Size();
+    chains_by_truck_pos.clear();
+    chains_by_truck_pos.resize(trucks_count);
+
+    InitFirstEdge(data);
+
+    if (mx_chain_len_ > 1) {
+        Merge(data, mx_chain_len_ - 1);
+    }
+}
+
+void ChainGenerator::InitFirstEdge(const Data& data) {
+    const Trucks& trucks = data.trucks;
+    const Orders& orders = data.orders;
 
     const size_t trucks_count = trucks.Size();
     const size_t orders_count = orders.Size();
@@ -104,7 +124,7 @@ void ChainGenerator::InitFirstEdge() {
         for (size_t to_order_pos = 0; to_order_pos < orders_count; ++to_order_pos) {
             const Order& to_order = orders.GetOrderConst(to_order_pos);
 
-            auto raw_cost = data_.MoveBetweenOrders(truck, from_order, to_order);
+            auto raw_cost = data.MoveBetweenOrders(truck, from_order, to_order);
             if (!raw_cost.has_value()) {
                 continue;
             }
@@ -122,9 +142,9 @@ void ChainGenerator::InitFirstEdge() {
     }
 }
 
-void ChainGenerator::Merge(size_t n_times) {
-    const Trucks& trucks = data_.trucks;
-    const Orders& orders = data_.orders;
+void ChainGenerator::Merge(const Data& data, size_t n_times) {
+    const Trucks& trucks = data.trucks;
+    const Orders& orders = data.orders;
 
     const size_t trucks_count = trucks.Size();
     const size_t orders_count = orders.Size();
@@ -137,7 +157,7 @@ void ChainGenerator::Merge(size_t n_times) {
         for (size_t to_order_pos = 0; to_order_pos < orders_count; ++to_order_pos) {
             const Order& to_order = orders.GetOrderConst(to_order_pos);
 
-            auto raw_revenue_addition = data_.MoveBetweenOrders(from_order, to_order);
+            auto raw_revenue_addition = data.MoveBetweenOrders(from_order, to_order);
             if (!raw_revenue_addition.has_value()) {
                 continue;
             }
@@ -164,7 +184,7 @@ void ChainGenerator::Merge(size_t n_times) {
                 size_t end_pos = chain.GetEndPos();
                 assert(end_pos > 0);
                 
-                size_t last_order_pos = chain.chain[end_pos - 1];
+                size_t last_order_pos = chain[end_pos - 1];
                 const Order& from_order = orders.GetOrderConst(last_order_pos);
 
                 // choosing order to merge chain with
@@ -187,7 +207,7 @@ void ChainGenerator::Merge(size_t n_times) {
                     }
 
                     Chain new_chain(chain);
-                    new_chain.chain[end_pos] = to_order_pos;
+                    new_chain[end_pos] = to_order_pos;
                     new_chain.SetRevenue(revenue);
 
                     chains_by_truck_pos[truck_pos].push_back(std::move(new_chain));
@@ -199,17 +219,17 @@ void ChainGenerator::Merge(size_t n_times) {
     }
 }
 
-void ChainGenerator::AddWeightsEdges(Orders& orders, FreeMovementWeightsVectors& edges_w_vecs) {
+void ChainGenerator::AddWeightsEdges(Data& data, const FreeMovementWeightsVectors& edges_w_vecs) {
     assert(ADD_WEIGHTS_EDGES_CALL_COUNT == 0);
     ADD_WEIGHTS_EDGES_CALL_COUNT++;
 
-    auto [additional_orders, free_edge_to_pos] = edges_w_vecs.GetFreeMovementEdges(data_);
+    auto [additional_orders, free_edge_to_pos] = edges_w_vecs.GetFreeMovementEdges(data);
 
-    const size_t trucks_count = data_.trucks.Size();
-    const size_t main_orders_count = data_.orders.Size();
+    const size_t trucks_count = data.trucks.Size();
+    const size_t main_orders_count = data.orders.Size();
 
     for (const Order& order : additional_orders) {
-        orders.AddOrder(order);
+        data.orders.AddOrder(order);
     }
 
     for (size_t truck_pos = 0; truck_pos < trucks_count; ++truck_pos) {
@@ -224,7 +244,7 @@ void ChainGenerator::AddWeightsEdges(Orders& orders, FreeMovementWeightsVectors&
 
             size_t end_pos = chain.GetEndPos();
             assert(end_pos > 0);
-            size_t last_order_pos = chain.chain[end_pos - 1];
+            size_t last_order_pos = chain[end_pos - 1];
 
             auto raw_vec = edges_w_vecs.GetWeightsVectorConst(truck_pos, last_order_pos);
             if (!raw_vec.has_value()) {
@@ -244,15 +264,37 @@ void ChainGenerator::AddWeightsEdges(Orders& orders, FreeMovementWeightsVectors&
                 free_edge_pos += main_orders_count;
 
                 if (first) {
-                    chains_by_truck_pos[truck_pos][chain_pos].chain[end_pos] = free_edge_pos;
+                    Chain& old_chain = chains_by_truck_pos[truck_pos][chain_pos];
+                    old_chain.chain[end_pos] = free_edge_pos;
+                    old_chain.revenue += revenue_bonus;
                     first = false;
                 } else {
                     Chain new_chain(chain);
-                    new_chain.chain[end_pos] = free_edge_pos;
+                    new_chain[end_pos] = free_edge_pos;
+                    new_chain.revenue += revenue_bonus;
 
                     chains_by_truck_pos[truck_pos].push_back(std::move(new_chain));
                 }
             }
         }
+
+        // lets also take in account free-movement edges from ffo or case where truck wont pick any orders
+        {
+            auto raw_vec = edges_w_vecs.GetWeightsVectorConst(truck_pos, Solver::ffo_pos);
+            if (!raw_vec.has_value()) {
+                continue;
+            }
+            const weights_vector_t& vec = raw_vec.value();
+
+            for(const auto& [to_city, revenue_bonus] : vec) {
+                size_t free_edge_pos = free_edge_to_pos[{truck_pos, Solver::ffo_pos, to_city}];
+                free_edge_pos += main_orders_count;
+
+                Chain new_chain({free_edge_pos});
+                new_chain.revenue += revenue_bonus;
+
+                chains_by_truck_pos[truck_pos].push_back(std::move(new_chain));
+            }
+        }   
     }
 }

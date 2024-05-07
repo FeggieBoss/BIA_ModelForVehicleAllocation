@@ -7,7 +7,7 @@
 WeightedCitiesSolver::WeightedCitiesSolver() {}
 
 const Data& WeightedCitiesSolver::GetDataConst() const {
-    return Solver::data_;
+    return data_;
 }
 
 void WeightedCitiesSolver::ModifyData(Data& data) const {
@@ -23,8 +23,8 @@ void WeightedCitiesSolver::ModifyData(Data& data) const {
 }
 
 void WeightedCitiesSolver::SetData(const Data& data) {
-    Solver::data_ = data;
-    ModifyData(Solver::data_);
+    data_ = data;
+    ModifyData(data_);
 }
 
 void WeightedCitiesSolver::SetData(const Data& data, unsigned int t, const FreeMovementWeightsVectors& edges_w_vecs) {
@@ -34,18 +34,13 @@ void WeightedCitiesSolver::SetData(const Data& data, unsigned int t, const FreeM
 }
 
 HighsModel WeightedCitiesSolver::CreateModel() {
-    Solver::to_3d_variables_.clear();
+    Params params = data_.params;
+    Trucks trucks = data_.trucks;
+    Orders orders = data_.orders;    
+    Distances dists = data_.dists;
 
-    Params params = Solver::data_.params;
-    Trucks trucks = Solver::data_.trucks;
-    Orders orders = Solver::data_.orders;    
-    Distances dists = Solver::data_.dists;
-
-    HonestSolver solver;
-    solver.SetData(Solver::data_);
-    HighsModel model = solver.CreateModel();
-
-    Solver::to_3d_variables_ = solver.to_3d_variables_;
+    flow_solver.SetData(data_);
+    HighsModel model = flow_solver.CreateModel();
 
     // changing CostVector: applying fine for waiting until time_boundary
     if (time_boundary_.has_value()) {
@@ -54,7 +49,7 @@ HighsModel WeightedCitiesSolver::CreateModel() {
 
         // processing c
         // model.lp_.col_cost_
-        for (auto &el : Solver::to_3d_variables_) {
+        for (auto &el : flow_solver.to_3d_variables) {
             size_t ind = el.first;
             auto& [truck_pos, from_order_pos, to_order_pos] = el.second;
 
@@ -78,9 +73,9 @@ HighsModel WeightedCitiesSolver::CreateModel() {
     }
     #ifdef DEBUG_MODE
     cout << "##COST_VECTOR_DEBUG" << endl; 
-    for (size_t ind = 0; ind < model.lp_.col_cost_.size(); ++ind) {
-        auto& [i,j,k] = Solver::to_3d_variables_[ind];
-        double c = model.lp_.col_cost_[ind];
+    for (size_t col = 0; col < model.lp_.col_cost_.size(); ++col) {
+        auto& [i,j,k] = flow_solver.to_3d_variables[col];
+        double c = model.lp_.col_cost_[col];
 
         printf("C[{%2ld, %2ld, %2ld}] = %5f\n", i, j, k, c);
     }
@@ -88,4 +83,9 @@ HighsModel WeightedCitiesSolver::CreateModel() {
     #endif
 
     return model;
+}
+
+solution_t WeightedCitiesSolver::Solve() {
+    auto model = CreateModel();
+    return flow_solver.Solve(model);
 }

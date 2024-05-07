@@ -24,11 +24,12 @@ set(sources
     src/data.cpp
     src/checker.cpp
     src/solver.cpp
-    src/honest_solver.cpp
+    src/flow_solver.cpp
     src/weighted_cities_solver.cpp
     src/batch_solver.cpp
     src/pre_solver.cpp
     src/chain_generator.cpp
+    src/chain_solver.cpp
 )
 add_executable(main
     src/main.cpp

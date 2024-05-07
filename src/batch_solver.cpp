@@ -1,6 +1,13 @@
 #include "batch_solver.h"
 
-BatchSolver::BatchSolver() {}
+
+BatchSolver::BatchSolver(std::shared_ptr<WeightedCitiesSolver> solver) : solver_(std::move(solver)) {
+    solver_model_type_ = SOLVER_MODEL_TYPE::FLOW_MODEL;
+}
+
+BatchSolver::BatchSolver(std::shared_ptr<ChainSolver> solver) : solver_(std::move(solver)) {
+    solver_model_type_ = SOLVER_MODEL_TYPE::ASSIGNMENT_MODEL;
+}
 
 template <class T>
 struct cmp {
@@ -97,6 +104,9 @@ static void UpdateFreeMovementWeightsVectors(
                 last_order.mask_trailer_type)
             ) { // bad trailer or load type
                 continue;
+            } else if (truck.init_city != last_order.from_city && truck.init_time >= last_order.start_time) {
+                // not compulsory check because solvers simply wont use such edges - made for performance
+                continue;
             }
 
             for (const auto& [_, future_order] : suf_orders) {
@@ -187,7 +197,6 @@ solution_t BatchSolver::Solve(const Data& data, unsigned int time_window) {
     std::vector<Order> batch_orders;
 
     FreeMovementWeightsVectors edges_w_vecs;
-    WeightedCitiesSolver solver;
     for(unsigned int cur_time_window = time_window;; cur_time_window += time_window) {
         // check if we processed all orders
         if (order_by_start_time.empty()) {
@@ -218,6 +227,7 @@ solution_t BatchSolver::Solve(const Data& data, unsigned int time_window) {
             truck.mask_load_type += batch_truck_pos * (1 << LOAD_TYPE_COUNT);
         }
 
+        std::cout << "Complete around ~" << (orders_count - order_by_start_time.size()) * 100 / orders_count << std::endl;
         std::cout << "BATCH_DEBUG: " << batch_data.trucks.Size() << " " << batch_data.orders.Size() << std::endl;
 
         #ifdef DEBUG_MODE
@@ -229,13 +239,30 @@ solution_t BatchSolver::Solve(const Data& data, unsigned int time_window) {
         
         // Solving problem with current batches
         UpdateFreeMovementWeightsVectors(edges_w_vecs, batch_data, cur_time_window, time_window, order_by_start_time);
-        solver.SetData(batch_data, cur_time_window, edges_w_vecs);
-        solution_t batch_solution = solver.Solve();
+        
+        // not necessary now but can have some hard unique logic for solver
+        switch (solver_model_type_) {
+            case SOLVER_MODEL_TYPE::FLOW_MODEL: {
+                WeightedCitiesSolver* solver = reinterpret_cast<WeightedCitiesSolver*>(solver_.get());
+                solver->SetData(batch_data, cur_time_window, edges_w_vecs);
+                break;
+            }
+            case SOLVER_MODEL_TYPE::ASSIGNMENT_MODEL: {
+                ChainSolver* solver = reinterpret_cast<ChainSolver*>(solver_.get());
+                solver->SetData(batch_data, edges_w_vecs);
+                break;
+            }
+            default: {
+                throw std::runtime_error("BatchSolver::Solve: unexpected SOLVER_MODEL_TYPE");
+            }
+        }
 
-        // We want to work with free-movement orders (read Note in weighted_cities_solver.h)
-        const Data& modified_batch_data = solver.GetDataConst();
+        solution_t batch_solution = solver_->Solve();
 
-        std::cout << "BATCH_DEBUG: with additional orders (" << modified_batch_data.orders.Size() << ")" << std::endl;
+        // We want to work with free-movement orders (read Note in weighted_cities_solver.h / chain_solver.h)
+        const Data& modified_batch_data = solver_->GetDataConst();
+
+        std::cout << "BATCH_DEBUG: with additional orders (" << modified_batch_data.orders.Size() << ")\n" << std::endl;
 
         // Merging solutions
         size_t batch_trucks_count = modified_batch_data.trucks.Size();
@@ -265,6 +292,10 @@ solution_t BatchSolver::Solve(const Data& data, unsigned int time_window) {
             } else {
                 const Order& order = modified_batch_data.orders.GetOrderConst(cur_orders.back());
                 cur_truck.init_time = order.finish_time;
+                // we made loop free-movement edge to last for a minute so trucks wont be able to some other free-movement edge after loop
+                if (order.from_city == order.to_city) {
+                    --cur_truck.init_time;
+                }
                 cur_truck.init_city = order.to_city;
             }
 
